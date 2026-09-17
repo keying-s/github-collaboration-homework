@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CLASS STRIKE — 浏览器 CS 风格射击游戏</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🔫</text></svg>">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:100%; height:100%; overflow:hidden; background:#0d1117;
+    font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif; color:#e6e6e6; user-select:none; }
+  canvas#game { position:fixed; inset:0; display:block; }
+
+  /* ---------- 通用 ---------- */
+  .btn { display:block; width:100%; padding:13px 18px; margin:8px 0; cursor:pointer;
+    background:linear-gradient(180deg,#2b3138,#1d2228); border:1px solid #3a434e; color:#e8e8e8;
+    font-size:17px; font-weight:600; letter-spacing:1px; transition:.12s; text-align:center; }
+  .btn:hover { border-color:#f0a13b; color:#f0a13b; background:#252b32; }
+  .btn.primary { background:linear-gradient(180deg,#c9872c,#a5691a); border-color:#e0a347; color:#fff; }
+  .btn.primary:hover { background:linear-gradient(180deg,#e09a35,#b87a20); color:#fff; }
+  .btn.small { padding:8px 12px; font-size:14px; margin:4px 0; }
+  input[type=text] { background:#15191e; border:1px solid #3a434e; color:#eee; padding:11px 12px;
+    font-size:16px; width:100%; outline:none; letter-spacing:2px; }
+  input[type=text]:focus { border-color:#f0a13b; }
+  .hint { color:#8b949e; font-size:13px; line-height:1.7; }
+  .accent { color:#f0a13b; }
+
+  /* ---------- 主菜单 ---------- */
+  #menu { position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center;
+    background:radial-gradient(1200px 700px at 50% 30%, #1b2530 0%, #0d1117 70%); }
+  #menu .wrap { width:920px; max-width:94vw; display:flex; gap:34px; align-items:stretch; }
+  #menu .left { flex:1.2; background:rgba(18,22,28,.92); border:1px solid #2a3240; padding:34px 38px; }
+  #menu .right { flex:1; background:rgba(18,22,28,.75); border:1px solid #2a3240; padding:26px 28px; overflow:auto; }
+  #menu h1 { font-size:44px; letter-spacing:4px; color:#f0f3f6; }
+  #menu h1 b { color:#f0a13b; }
+  #menu .sub { color:#8b949e; margin:6px 0 24px; font-size:14px; letter-spacing:2px; }
+  #menu label { display:block; font-size:13px; color:#8b949e; margin:14px 0 6px; letter-spacing:1px; }
+  #joinRow { display:flex; gap:8px; }
+  #joinRow input { text-transform:uppercase; }
+  #joinRow .btn { width:130px; margin:0; }
+  #menu .foot { margin-top:18px; font-size:12px; color:#6e7781; line-height:1.8; }
+  .keys { width:100%; border-collapse:collapse; font-size:13px; }
+  .keys td { padding:4px 6px; border-bottom:1px solid #232a33; color:#aab3bd; }
+  .keys td:first-child { color:#f0a13b; font-weight:600; white-space:nowrap; width:110px; }
+  #menu .right h3 { font-size:15px; letter-spacing:2px; color:#c9d1d9; margin-bottom:12px; }
+
+  /* ---------- HUD ---------- */
+  #hud { position:fixed; inset:0; z-index:10; pointer-events:none; display:none; }
+
+  /* 准星 */
+  #xhair { position:absolute; left:50%; top:50%; width:0; height:0; }
+  #xhair span { position:absolute; background:#3dff6e; box-shadow:0 0 2px rgba(0,0,0,.9); }
+  #xhair .h { width:9px; height:2px; top:-1px; }
+  #xhair .v { width:2px; height:9px; left:-1px; }
+  #xhair .l { right:var(--gap,5px); } #xhair .r { left:var(--gap,5px); }
+  #xhair .u { bottom:var(--gap,5px); } #xhair .d { top:var(--gap,5px); }
+  #hitmark { position:absolute; left:50%; top:50%; width:0; height:0; opacity:0; }
+  #hitmark span { position:absolute; width:11px; height:2px; background:#fff; box-shadow:0 0 3px #000; }
+  #hitmark .a { transform:translate(6px,6px) rotate(45deg); }
+  #hitmark .b { transform:translate(-16px,6px) rotate(-45deg); }
+  #hitmark .c { transform:translate(6px,-7px) rotate(-45deg); }
+  #hitmark .d { transform:translate(-16px,-7px) rotate(45deg); }
+  #hitmark.hs span { background:#ff3b3b; }
+
+  /* 血量 / 弹药 */
+  #hp-wrap { position:absolute; left:26px; bottom:24px; display:flex; align-items:center; gap:12px;
+    background:rgba(10,13,17,.55); padding:10px 16px; border-left:3px solid #3dff6e; }
+  #hp-num { font-size:34px; font-weight:700; min-width:64px; text-align:right; }
+  #hp-bar { width:130px; height:8px; background:#22282f; }
+  #hp-bar i { display:block; height:100%; background:#3dff6e; width:100%; }
+  #ammo-wrap { position:absolute; right:26px; bottom:24px; text-align:right;
+    background:rgba(10,13,17,.55); padding:10px 16px; border-right:3px solid #f0a13b; }
+  #wname { font-size:13px; color:#f0a13b; letter-spacing:2px; margin-bottom:2px; }
+  #ammo { font-size:34px; font-weight:700; }
+  #ammo small { font-size:16px; color:#8b949e; font-weight:400; }
+  #reload-tip { position:absolute; right:26px; bottom:96px; color:#f0a13b; font-size:15px; letter-spacing:2px; display:none; }
+
+  /* 顶部比分 */
+  #scorebar { position:absolute; top:14px; left:50%; transform:translateX(-50%);
+    display:flex; align-items:center; gap:14px; background:rgba(10,13,17,.6); padding:6px 18px; font-size:20px; font-weight:700; }
+  #scorebar .t { color:#e8a33d; } #scorebar .ct { color:#5b8fd6; }
+  #scorebar .mode { font-size:11px; color:#8b949e; font-weight:400; letter-spacing:1px; }
+
+  /* 击杀信息 */
+  #killfeed { position:absolute; top:14px; right:18px; width:380px; text-align:right; }
+  #killfeed div { background:rgba(10,13,17,.65); display:inline-block; padding:4px 10px; margin:3px 0;
+    font-size:13px; border-right:2px solid #666; }
+  #killfeed .me { border-right-color:#f0a13b; background:rgba(90,60,10,.55); }
+  #killfeed .hs { color:#ff5d5d; font-weight:700; }
+
+  /* 记分板 */
+  #board { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:640px;
+    background:rgba(10,13,17,.88); border:1px solid #2a3240; padding:18px 22px; display:none; }
+  #board h2 { font-size:15px; letter-spacing:3px; margin-bottom:10px; color:#c9d1d9; }
+  #board table { width:100%; border-collapse:collapse; font-size:14px; margin-bottom:14px; }
+  #board th { text-align:left; color:#8b949e; font-size:12px; padding:4px 8px; border-bottom:1px solid #2a3240; }
+  #board td { padding:5px 8px; border-bottom:1px solid #1b2129; }
+  #board tr.me td { color:#f0a13b; }
+  #board .tt h2 { color:#e8a33d; } #board .ctt h2 { color:#5b8fd6; }
+
+  /* 死亡 / 受击 / 胜负 */
+  #death { position:absolute; inset:0; background:rgba(60,0,0,.35); display:none; align-items:center; justify-content:center; flex-direction:column; }
+  #death h2 { font-size:34px; color:#ff6b6b; letter-spacing:6px; text-shadow:0 2px 8px #000; }
+  #death p { margin-top:10px; font-size:18px; color:#ddd; }
+  #dmgflash { position:absolute; inset:0; box-shadow:inset 0 0 130px rgba(255,0,0,.55); opacity:0; transition:opacity .35s; }
+  #winov { position:absolute; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column; background:rgba(0,0,0,.45); }
+  #winov h1 { font-size:52px; letter-spacing:8px; text-shadow:0 4px 18px #000; }
+  #winov p { color:#bbb; margin-top:12px; }
+
+  /* 房间码横幅 */
+  #roombanner { position:absolute; top:14px; left:18px; background:rgba(10,13,17,.6); padding:8px 14px; display:none; }
+  #roombanner .code { font-size:26px; letter-spacing:6px; color:#f0a13b; font-weight:700; }
+  #roombanner .tip { font-size:11px; color:#8b949e; }
+
+  /* 暂停 / 连接中 */
+  .overlay { position:fixed; inset:0; z-index:40; display:none; align-items:center; justify-content:center; background:rgba(8,10,14,.82); }
+  .overlay .panel { width:360px; background:#141920; border:1px solid #2a3240; padding:28px 30px; }
+  .overlay h2 { font-size:20px; letter-spacing:3px; margin-bottom:16px; color:#e6e6e6; }
+  .overlay .sensrow { display:flex; align-items:center; gap:10px; margin:12px 0; font-size:13px; color:#aab3bd; }
+  .overlay input[type=range] { flex:1; accent-color:#f0a13b; }
+  #pause .hostonly { display:none; }
+  #pause.host .hostonly { display:block; }
+  #toast { position:fixed; top:70px; left:50%; transform:translateX(-50%); z-index:60; display:flex; flex-direction:column; gap:6px; align-items:center; pointer-events:none; }
+  #toast div { background:rgba(20,25,31,.92); border:1px solid #3a434e; padding:8px 18px; font-size:14px; animation:fade 3s forwards; }
+  @keyframes fade { 0%{opacity:0; transform:translateY(-6px)} 8%{opacity:1; transform:none} 80%{opacity:1} 100%{opacity:0} }
+  #connstatus { position:fixed; inset:0; z-index:45; display:none; align-items:center; justify-content:center;
+    background:rgba(8,10,14,.9); flex-direction:column; gap:14px; }
+  #connstatus .spin { width:38px; height:38px; border:3px solid #2a3240; border-top-color:#f0a13b; border-radius:50%; animation:sp 1s linear infinite; }
+  @keyframes sp { to { transform:rotate(360deg) } }
+
+  /* 金钱 HUD */
+  #moneyhud { position:absolute; left:26px; bottom:96px; font-size:26px; font-weight:700; color:#7ee787;
+    background:rgba(10,13,17,.55); padding:6px 14px; border-left:3px solid #7ee787; letter-spacing:1px; }
+
+  /* 武器商店 */
+  #buymenu .buypanel { width:540px; }
+  #buymoney { float:right; color:#7ee787; font-size:22px; }
+  .buyitem { display:flex; align-items:center; gap:12px; padding:10px 12px; margin:6px 0;
+    background:#181d24; border:1px solid #2a3240; }
+  .buyitem.owned { opacity:.55; }
+  .buyitem .bi-l { flex:1; }
+  .buyitem .bi-l b { font-size:16px; display:block; }
+  .buyitem .bi-l span { font-size:12px; color:#8b949e; }
+  .buyitem .bi-r { font-size:18px; font-weight:700; color:#7ee787; width:76px; text-align:right; }
+  .buyitem .bi-btn { width:84px; text-align:center; padding:8px 0; font-size:14px; cursor:pointer;
+    background:linear-gradient(180deg,#c9872c,#a5691a); border:1px solid #e0a347; color:#fff; font-weight:600; }
+  .buyitem .bi-btn:not(button) { background:none; border:1px dashed #3a434e; color:#8b949e; cursor:default; }
+  .buyitem button.buy:disabled { background:#22282f; border-color:#2a3240; color:#57606a; cursor:not-allowed; }
+  .buyitem button.buy:not(:disabled):hover { filter:brightness(1.15); }
+</style>
+</head>
+<body>
+
+<!-- ======== 主菜单 ======== -->
+<div id="menu">
+  <div class="wrap">
+    <div class="left">
+      <h1>CLASS <b>STRIKE</b></h1>
+      <div class="sub">浏览器 CS 风格团队射击 · P2P 在线联机 · 无需服务器</div>
+      <label>你的昵称</label>
+      <input type="text" id="nameInput" maxlength="12" placeholder="输入昵称">
+      <button class="btn primary" id="btnSolo">单人练习（对战机器人）</button>
+      <button class="btn" id="btnHost">创建联机房间（当房主）</button>
+      <label>加入朋友的房间</label>
+      <div id="joinRow">
+        <input type="text" id="codeInput" maxlength="5" placeholder="房间码">
+        <button class="btn" id="btnJoin">加入房间</button>
+      </div>
+      <div class="foot">
+        联机说明：房主点「创建联机房间」后把 <span class="accent">5 位房间码</span> 发给朋友，朋友在本页输入即可一起玩。<br>
+        连接为玩家之间直连（WebRTC P2P），不需要公网 IP 和服务器，房主保持页面开着即可。
+      </div>
+    </div>
+    <div class="right">
+      <h3>操作说明</h3>
+      <table class="keys">
+        <tr><td>W A S D</td><td>移动</td></tr>
+        <tr><td>鼠标</td><td>视角 / 瞄准</td></tr>
+        <tr><td>左键</td><td>开枪</td></tr>
+        <tr><td>R</td><td>换弹</td></tr>
+        <tr><td>1 / 2 / 3 / 4</td><td>切换武器（滚轮也可）</td></tr>
+        <tr><td>B</td><td>打开武器商店</td></tr>
+        <tr><td>空格</td><td>跳跃</td></tr>
+        <tr><td>Ctrl / C</td><td>下蹲</td></tr>
+        <tr><td>Shift</td><td>静步（更精准）</td></tr>
+        <tr><td>Tab</td><td>查看记分板</td></tr>
+        <tr><td>Esc</td><td>暂停菜单</td></tr>
+      </table>
+      <h3 style="margin-top:18px">游戏规则</h3>
+      <div class="hint">
+        团队死斗：<span style="color:#e8a33d">恐怖分子（T）</span> vs
+        <span style="color:#5b8fd6">反恐精英（CT）</span>，先拿到 <b>30</b> 击杀的队伍获胜，随后自动重新开始。<br><br>
+        经济系统：初始 <b style="color:#7ee787">$1000</b>，每次击杀 <b style="color:#7ee787">+$300</b>，按 <b>B</b> 购买 MP5 / AWP 等新武器（购买后死亡不掉落，重生补满弹药）<br><br>
+        爆头伤害 ×4 · 移动/跳跃开枪更飘 · 下蹲更准 · 无队友伤害
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======== 游戏内 HUD ======== -->
+<div id="hud">
+  <div id="xhair"><span class="h l"></span><span class="h r"></span><span class="v u"></span><span class="v d"></span></div>
+  <div id="hitmark"><span class="a"></span><span class="b"></span><span class="c"></span><span class="d"></span></div>
+  <div id="hp-wrap"><span id="hp-num">100</span><div id="hp-bar"><i></i></div></div>
+  <div id="ammo-wrap"><div id="wname">AK-47</div><div id="ammo">30 <small>/ 90</small></div></div>
+  <div id="reload-tip">换弹中…</div>
+  <div id="scorebar"><span class="t" id="scT">0</span><span style="color:#57606a">:</span><span class="ct" id="scCT">0</span><span class="mode" id="scMode">团队死斗 · 30 胜</span></div>
+  <div id="killfeed"></div>
+  <div id="moneyhud">$1000</div>
+  <div id="roombanner"><div class="code" id="roomcode">-----</div><div class="tip">把房间码发给朋友一起玩</div></div>
+  <div id="board"></div>
+  <div id="death"><h2>你已阵亡</h2><p id="deathTimer">3 秒后重生</p></div>
+  <div id="dmgflash"></div>
+  <div id="winov"><h1 id="winTitle">胜利！</h1><p>8 秒后开始新的一局</p></div>
+</div>
+
+<!-- ======== 暂停菜单 ======== -->
+<div class="overlay" id="pause">
+  <div class="panel">
+    <h2>已暂停</h2>
+    <button class="btn primary" id="btnResume">继续游戏</button>
+    <div class="sensrow">鼠标灵敏度 <input type="range" id="sens" min="0.3" max="2.5" step="0.05" value="1"><span id="sensVal">1.0</span></div>
+    <button class="btn small hostonly" id="btnAddBot">+ 添加一个机器人</button>
+    <button class="btn small hostonly" id="btnDelBot">− 移除一个机器人</button>
+    <button class="btn small hostonly" id="btnCopyCode">复制房间码</button>
+    <button class="btn small" id="btnQuit">退出到主菜单</button>
+  </div>
+</div>
+
+<!-- ======== 连接中 ======== -->
+<div id="connstatus"><div class="spin"></div><div id="connText">正在连接房间…</div></div>
+
+<!-- ======== 武器商店 ======== -->
+<div class="overlay" id="buymenu">
+  <div class="panel buypanel">
+    <h2>武器商店 <span id="buymoney">$1000</span></h2>
+    <div id="buylist"></div>
+    <p class="hint" style="margin-top:12px">击杀奖励 <b style="color:#7ee787">+$300</b> · 按 <b>B</b> 或 <b>Esc</b> 关闭商店</p>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<canvas id="game"></canvas>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js" } }
+</script>
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>
