@@ -169,6 +169,15 @@ button:hover {
 .icon-button:hover {
   background: #263a2e;
 }
+.language-button {
+  width: 44px;
+  border: 1px solid #3b5045;
+  color: #d8dfcb;
+  font:
+    700 10px/1 Consolas,
+    monospace;
+  letter-spacing: 0.5px;
+}
 .workspace {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 250px;

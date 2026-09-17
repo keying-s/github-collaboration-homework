@@ -11,6 +11,7 @@ import type {
   Pickup,
   Player,
   SkillId,
+  StatusMessage,
   Vec,
   WeaponId,
 } from './types';
@@ -49,7 +50,7 @@ export class Simulation {
   bestCombo = 0;
   comboTime = 0;
   damageTaken = 0;
-  hint = '';
+  hint: StatusMessage = { key: 'stateReady' };
   waveDelay = 1.5;
   private queue: EnemyKind[] = [];
   private spawnTimer = 0;
@@ -152,7 +153,7 @@ export class Simulation {
     this.roomKills = 0;
     this.fieldModuleDropped = false;
     this.flowTimer = 0;
-    this.hint = '状态已补满 · 清除全部感染体';
+    this.hint = { key: 'stateReady' };
     this.pickups.push({
       id: this.nextId++,
       x: 494,
@@ -183,10 +184,7 @@ export class Simulation {
     });
     this.offeredSkills = [];
     this.phase = this.upgradeSource === 'clear' ? 'exit' : 'combat';
-    this.hint =
-      this.phase === 'exit'
-        ? '传送门已接通 · 前往右侧，按 E 进入下一关'
-        : '模块已激活 · 继续清除感染体';
+    this.hint = { key: this.phase === 'exit' ? 'portalReady' : 'skillActive' };
     this.player.invincible = 1.2;
   }
   drainEvents() {
@@ -221,7 +219,7 @@ export class Simulation {
     if (this.player.hp <= 0) {
       this.player.hp = 0;
       this.phase = 'lost';
-      this.hint = '行动中断';
+      this.hint = { key: 'runInterrupted' };
     }
   }
   private updatePlayer(dt: number, input: InputState) {
@@ -269,7 +267,10 @@ export class Simulation {
       if (pickup.kind === 'health' && distance(p, pickup) < 34 && p.hp < p.maxHp) {
         p.hp = Math.min(p.maxHp, p.hp + 25);
         this.pickups = this.pickups.filter((v) => v.id !== pickup.id);
-        this.emit('pickup', p, { text: '+25 生命', color: 0xa6d8a7 });
+        this.emit('pickup', p, {
+          text: { zh: '+25 生命', en: '+25 HEALTH' },
+          color: 0xa6d8a7,
+        });
       }
     }
     if (input.interact) {
@@ -379,17 +380,27 @@ export class Simulation {
       this.queue = [...this.level.waves[this.waveIndex]];
       this.waveIndex++;
       this.spawnTimer = 0;
-      this.hint = `第 ${this.waveIndex} 波感染体接近`;
-      this.emit('wave', { x: 640, y: 180 }, { text: `WAVE 0${this.waveIndex}` });
+      this.hint = { key: 'waveIncoming', values: { wave: this.waveIndex } };
+      this.emit(
+        'wave',
+        { x: 640, y: 180 },
+        {
+          text: { zh: `WAVE 0${this.waveIndex}`, en: `WAVE 0${this.waveIndex}` },
+        },
+      );
     } else {
       this.bullets = [];
       this.phase = 'exit';
-      this.hint = this.isLastLevel
-        ? '核心已净化 · 进入右侧传送门撤离'
-        : '区域已肃清 · 拾取模块，再前往右侧传送门';
+      this.hint = { key: this.isLastLevel ? 'finalPortal' : 'clearPortal' };
       if (!this.isLastLevel && this.options.length)
         this.pickups.push({ id: this.nextId++, x: 640, y: 365, kind: 'module', age: 0 });
-      this.emit('clear', { x: 640, y: 365 }, { text: '区域肃清' });
+      this.emit(
+        'clear',
+        { x: 640, y: 365 },
+        {
+          text: { zh: '区域肃清', en: 'AREA CLEARED' },
+        },
+      );
     }
   }
   private spawn(kind: EnemyKind) {
@@ -632,7 +643,7 @@ export class Simulation {
       if (this.levelIndex < 2 && this.roomKills >= 5 && !this.fieldModuleDropped) {
         this.fieldModuleDropped = true;
         this.pickups.push({ id: this.nextId++, x: e.x, y: e.y, kind: 'module', age: 0 });
-        this.hint = '发现技能模块 · 靠近后按 E 拾取';
+        this.hint = { key: 'moduleFound' };
       }
       if (this.levelIndex === 1 && this.roomKills === 4)
         this.pickups.push({
