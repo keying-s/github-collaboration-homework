@@ -1,0 +1,51 @@
+name: 功能提案
+description: 为余烬协议提出并认领一个可以独立验收的 feature。
+title: "[Feature] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        先搜索已有 Issue 和 PR，避免重复开发。主项目是 ember-protocol/。
+        一个任务由一位人类负责人指挥自己的 Agent，另一位组员参与评审。
+  - type: input
+    id: owner
+    attributes:
+      label: 功能负责人
+      description: 填写自己的 GitHub 用户名；有权限时同时设置 Issue assignee。
+      placeholder: keying-s / fredericsetievi / xmy-lab
+    validations:
+      required: true
+  - type: textarea
+    id: value
+    attributes:
+      label: 玩家价值与功能描述
+      description: 在什么场景下会更好玩或更顺畅？
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收条件
+      description: 写 2–4 条可以实际操作或验证的结果。
+      value: |
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 范围与非目标
+      description: 这次做什么，不顺带做什么？
+    validations:
+      required: true
+  - type: textarea
+    id: coordination
+    attributes:
+      label: 修改范围与协作依赖
+      description: 预计涉及哪些文件、公共接口、重叠 Issue 或 PR？不确定的部分请标明待 Agent 检查。
+  - type: textarea
+    id: prompt
+    attributes:
+      label: 给 Agent 的提示词摘要
+      description: 可稍后补充关键约束与人类决策；不要粘贴凭据或私人内容。
