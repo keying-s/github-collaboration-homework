@@ -2,7 +2,7 @@
 
 This file is shared by all team members for the Git conflict exercise.
 
-Current editor: fredericsetievi
+Current editors: keying-s, fredericsetievi, xmy-lab
 
 ## Notes
 
