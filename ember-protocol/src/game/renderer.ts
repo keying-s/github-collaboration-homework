@@ -3,6 +3,7 @@ import { WEAPONS } from './config';
 import { distance, seededRandom } from './math';
 import type { Simulation } from './simulation';
 import type { Enemy, GameEvent, Vec, WeaponId } from './types';
+import type { I18n } from '../i18n';
 
 type Graphics = Phaser.GameObjects.Graphics;
 interface Particle extends Vec {
@@ -37,6 +38,7 @@ export class ArenaRenderer {
   constructor(
     private scene: Phaser.Scene,
     private model: Simulation,
+    private i18n: I18n,
   ) {
     this.floor = scene.add.graphics();
     this.ink = scene.add.graphics();
@@ -499,7 +501,11 @@ export class ArenaRenderer {
         .text(
           event.x + (this.random() - 0.5) * 20,
           event.y - 28,
-          event.type === 'pickup' ? (event.text ?? '模块已拾取') : String(event.value),
+          event.type === 'pickup'
+            ? event.text
+              ? this.i18n.text(event.text)
+              : this.i18n.t('pickupModule')
+            : String(event.value),
           {
             fontFamily: 'Consolas, Microsoft YaHei, monospace',
             fontSize: event.type === 'pickup' ? 17 : 15,

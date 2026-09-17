@@ -10,11 +10,29 @@ export type WeaponId = 'rifle' | 'shotgun' | 'arc';
 export type SkillId = 'chain' | 'cryo' | 'pierce' | 'nova' | 'leech' | 'haste';
 export type EnemyKind = 'crawler' | 'spitter' | 'brute' | 'boss';
 export type Phase = 'menu' | 'combat' | 'upgrade' | 'exit' | 'won' | 'lost';
+export type Locale = 'zh-CN' | 'en';
+export type StatusMessageKey =
+  | 'stateReady'
+  | 'skillActive'
+  | 'portalReady'
+  | 'runInterrupted'
+  | 'waveIncoming'
+  | 'finalPortal'
+  | 'clearPortal'
+  | 'moduleFound';
+export interface LocalizedText {
+  zh: string;
+  en: string;
+}
+export interface StatusMessage {
+  key: StatusMessageKey;
+  values?: Record<string, string | number>;
+}
 export interface Weapon {
   id: WeaponId;
-  name: string;
-  label: string;
-  description: string;
+  name: LocalizedText;
+  label: LocalizedText;
+  description: LocalizedText;
   color: number;
   damage: number;
   interval: number;
@@ -27,9 +45,9 @@ export interface Weapon {
 }
 export interface Skill {
   id: SkillId;
-  name: string;
-  tag: string;
-  description: string;
+  name: LocalizedText;
+  tag: LocalizedText;
+  description: LocalizedText;
   color: string;
   icon: string;
 }
@@ -112,13 +130,13 @@ export interface GameEvent extends Vec {
   color?: number;
   value?: number;
   target?: Vec;
-  text?: string;
+  text?: LocalizedText;
   loud?: boolean;
 }
 export interface Level {
-  name: string;
-  en: string;
-  subtitle: string;
+  name: LocalizedText;
+  code: string;
+  subtitle: LocalizedText;
   accent: number;
   floor: number;
   obstacles: Rect[];

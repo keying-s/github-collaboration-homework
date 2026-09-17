@@ -3,6 +3,7 @@ import { ArenaRenderer } from './renderer';
 import type { Simulation } from './simulation';
 import type { AudioEngine } from './audio';
 import type { InputState } from './types';
+import type { I18n } from '../i18n';
 
 export class ArenaScene extends Phaser.Scene {
   private arenaRenderer!: ArenaRenderer;
@@ -13,11 +14,12 @@ export class ArenaScene extends Phaser.Scene {
   constructor(
     private model: Simulation,
     private audio: AudioEngine,
+    private i18n: I18n,
   ) {
     super('Arena');
   }
   create() {
-    this.arenaRenderer = new ArenaRenderer(this, this.model);
+    this.arenaRenderer = new ArenaRenderer(this, this.model, this.i18n);
     this.keys = this.input.keyboard!.addKeys(
       'W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,SHIFT,R,E,Q',
     ) as typeof this.keys;
