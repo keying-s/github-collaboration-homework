@@ -1,0 +1,11 @@
+# Keep the new project and collaboration docs consistent across Windows and Linux.
+# Historical class-strike and team-notes files are deliberately outside this scope.
+/README.md text eol=lf
+/AGENTS.md text eol=lf
+/CONTRIBUTING.md text eol=lf
+/.gitignore text eol=lf
+/.gitattributes text eol=lf
+/.github/** text eol=lf
+/docs/** text eol=lf
+/ember-protocol/** text=auto eol=lf
+/ember-protocol/*.cmd text eol=crlf

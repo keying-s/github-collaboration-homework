@@ -1,0 +1,11 @@
+**/node_modules/
+**/dist/
+**/artifacts/
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
