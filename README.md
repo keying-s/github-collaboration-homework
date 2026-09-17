@@ -78,6 +78,33 @@ npm.cmd run dev
 | 暂停 / 音效开关             | Esc / M         |
 | 切换中文 / English          | L / 右上角按钮  |
 
+## Feature 边界：可以改什么，不能改什么
+
+这是同一个游戏的持续扩展，不是三个人各自改成不同类型的游戏。普通 feature 必须保留以下基础：
+
+| 不可改动的核心 / Fixed foundation | 具体含义 |
+| ---------------------------------- | -------- |
+| 2D 俯视角                          | 不改成 3D、第一人称、横版或其他视角。 |
+| 射击闯关 PvE                       | 玩家移动、瞄准、射击，清除每关怪物，再通过出口进入下一关并挑战 Boss。不能改成纯解谜、经营或 PvP 对战。 |
+| 单人与协作方向                     | 保留单人游玩，也保留多人合作的发展方向；当前 AI 战友不是已经完成的真人联网。可以实现真人协作，但不能删除单人模式或改成只能对战。 |
+| 枪械与技能构筑                     | 战斗中捡枪、获得技能并形成组合仍是核心成长方式。 |
+| 固定开局、无经济系统               | 不增加金币、商店、付费购买或永久数值养成；每次行动和每关仍按现有规则恢复。 |
+
+可以增加或改进的 feature 包括：
+
+- 新角色、角色外观、角色能力与动画。
+- 新地图、房间、路线、环境机关和关卡危险。
+- 新怪物、精英怪、Boss、攻击方式与预警反馈。
+- 新技能、技能组合、枪械、射击手感和战斗平衡。
+- 视觉、音效、命中反馈、UI、可访问性、本地化和性能。
+- 在保留单人体验和核心闯关循环的前提下，实现或增强合作功能。
+
+如果一个想法必须改变上面的基础玩法，先由三名组员共同讨论并明确批准，不能把它当作普通 feature 直接交给 Agent 实现。所有玩家可见内容继续遵守中英文双语要求。
+
+### 可直接发给组员的英文说明
+
+> Team, please add features within the existing Ember Protocol framework. Keep the game a 2D top-down, stage-based PvE shooter where players clear enemies, collect weapons and skills, and move to the next area; preserve both solo and cooperative play directions. You may add or improve characters, maps, rooms, enemies, bosses, skills, guns, hazards, visual and audio feedback, UI, accessibility, balance, and cooperative features, but do not convert the game to 3D, change its core genre or gameplay loop, remove solo or co-op support, or add a gold, shop, or permanent-stat economy. Please claim an Issue, work on a separate branch, keep all player-facing text bilingual in Chinese and English, run the project checks, and open one focused PR without overwriting teammates' work.
+
 ## 每个人以后怎么加 feature
 
 **想法 → Issue 认领 → 功能分支 → Agent 开发 → 验证 → PR → 队友试玩评审 → 合并 → 所有人同步。**
@@ -101,13 +128,14 @@ npm.cmd run dev
 现有 Issue：[编号；没有则先查重，再创建并认领]。
 玩家可见的验收结果：[列出 2–4 条]。
 本功能的所有玩家可见内容必须同时提供中文和英文，并验证两种语言。
-本次不做：[例如“不改经济系统、不重写其他怪物、不接入联网”]。
+本次不做：[例如“不改经济系统、不重写其他怪物”]。
 
 请先阅读 README.md、AGENTS.md、CONTRIBUTING.md、相关目录说明与已有代码，
 检查工作区、远端和相关开放 Issue/PR，确认当前状态及可能重叠的修改。
 在独立功能分支中实际完成这个功能，保持现有功能可用，并复用现有架构。
 若涉及相同核心接口，先处理依赖或说明冲突；普通实现选择自行判断。
 不要覆盖队友改动、强推 main、擅自增加经济系统或修改 class-strike。
+必须保留 2D 俯视角、射击闯关 PvE、单人与协作方向、枪械与技能构筑等核心玩法。
 
 我授权你为本功能维护 Issue、提交代码、推送功能分支并创建 PR，暂不合并 main。
 请完成相关测试、构建和可进行的实际试玩，更新需要变更的说明。

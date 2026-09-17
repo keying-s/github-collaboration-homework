@@ -24,6 +24,7 @@
 - **范围和非目标**：这次做什么，不顺带做什么。
 - **负责人**：使用 Issue assignee；无权限设置时，在描述中明确写出负责人，由有权限成员更新。
 - **相关工作**：查到的重叠 Issue / PR、共享接口和先后依赖。
+- **核心玩法检查**：确认仍是 2D 俯视角射击闯关 PvE，并保留单人、合作、枪械和技能构筑方向。改变这些基础的提案必须先由三名组员共同决定。
 
 不要求每个提案先写长文档。任务大到无法在一个易评审的 PR 中完成时，再拆成里程碑；复杂设计使用 [功能文档模板](docs/FEATURE_TEMPLATE.md)。
 
@@ -47,7 +48,7 @@ git switch -c feat/keying-s/splitting-enemy
 git worktree add ../homework-splitting-enemy -b feat/keying-s/splitting-enemy origin/main
 ```
 
-两个示例是二选一，不能重复创建同名分支。每个 worktree 分别安装依赖。需要同时运行多个开发服务器时，在游戏目录执行 `node node_modules/vite/bin/vite.js --port 5174`，选择空闲端口；不要关闭别人的服务来抢端口。
+两个示例是二选一，不能重复创建同名分支。每个 worktree 分别安装依赖。需要同时运行多个开发服务器时，在游戏目录执行 `node node_modules/vite/bin/vite.js --port 5174`，选择空闲端口；不要关闭别人的服务来抢端口。`启动游戏.cmd` 按产品要求会主动替换本机 5173 的旧服务，所以共享电脑并行开发时不要用它启动第二个实例。
 
 ## 4. 编码前说明影响范围
 
