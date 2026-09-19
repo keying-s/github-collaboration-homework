@@ -35,7 +35,7 @@ export class Interface {
         <main class="workspace">
           <section class="field-wrap">
             <div class="field-top"><div><span class="live-dot"></span><span id="field-status">${t('trainingStandby')}</span></div><span>TOP-DOWN ROGUELITE <i>✦</i> SECTOR <b id="sector-number">01</b></span></div>
-            <div class="arena-shell">
+            <div class="field-stage"><div class="arena-shell">
               <div id="game" data-i18n-aria="gameLabel" aria-label="${t('gameLabel')}"></div>
               <div class="arena-ui" id="arena-hud">
                 <div class="room-label"><span id="room-code"></span><h2 id="room-name"></h2><p id="room-hint"></p></div>
@@ -45,7 +45,7 @@ export class Interface {
                 <div id="interaction" class="interaction"></div><div id="combo" class="combo"></div>
               </div>
               <div id="overlay" class="overlay"></div>
-            </div>
+            </div></div>
             <div class="field-bottom"><span><i class="small-dot"></i><span id="mission-line">${t('chooseMode')}</span></span><span id="run-clock">00:00</span></div>
           </section>
           <aside class="sidebar">
