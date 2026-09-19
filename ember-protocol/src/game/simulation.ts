@@ -52,6 +52,9 @@ export class Simulation {
   comboTime = 0;
   damageTaken = 0;
   freeze = 0;
+  training = false;
+  trainingDone = new Set<string>();
+  shotsFired = 0;
   hint: StatusMessage = { key: 'stateReady' };
   waveDelay = 1.5;
   private queue: EnemyKind[] = [];
@@ -118,6 +121,9 @@ export class Simulation {
     this.skills = [];
     this.offeredSkills = [];
     this.inventory = ['rifle'];
+    this.training = false;
+    this.trainingDone = new Set();
+    this.shotsFired = 0;
     this.player = this.newPlayer();
     this.kills = 0;
     this.elapsed = 0;
@@ -130,6 +136,50 @@ export class Simulation {
     this.paused = false;
     this.phase = 'combat';
     this.prepareRoom();
+  }
+  /** Safe practice sandbox: invincible player, stationary dummies, no waves. */
+  beginTraining() {
+    this.start(false);
+    this.training = true;
+    this.phase = 'combat';
+    this.trainingDone = new Set();
+    this.shotsFired = 0;
+    this.player.invincible = 999;
+    this.barrels = [];
+    this.enemies = [];
+    this.queue = [];
+    this.spawnTrainingDummies();
+  }
+  endTraining() {
+    this.training = false;
+    this.trainingDone = new Set();
+    this.phase = 'menu';
+  }
+  private spawnTrainingDummies() {
+    const slots = [
+      { x: 470, y: 300 },
+      { x: 820, y: 320 },
+      { x: 640, y: 560 },
+      { x: 905, y: 540 },
+    ];
+    for (const s of slots)
+      this.enemies.push({
+        ...s,
+        id: this.nextId++,
+        kind: 'crawler',
+        hp: 140,
+        maxHp: 140,
+        radius: 20,
+        angle: 0,
+        cooldown: 100,
+        slow: 0,
+        flash: 0,
+        age: 10,
+        windup: 0,
+        target: { ...this.player },
+        charge: 0,
+        home: { ...s },
+      });
   }
   private prepareRoom() {
     this.enemies = [];
@@ -206,6 +256,10 @@ export class Simulation {
       this.freeze = Math.max(0, this.freeze - dt);
       return;
     }
+    if (this.training) {
+      this.player.invincible = Math.max(this.player.invincible, 999);
+      this.player.hp = this.player.maxHp;
+    }
     if (this.phase === 'combat') this.elapsed += dt;
     this.comboTime = Math.max(0, this.comboTime - dt);
     if (this.comboTime === 0) this.combo = 0;
@@ -214,7 +268,7 @@ export class Simulation {
     this.pickups.forEach((p) => (p.age += dt));
     this.updateAlly(dt);
     if (this.phase === 'combat') {
-      this.updateWaves(dt);
+      if (!this.training) this.updateWaves(dt);
       this.flowTimer -= dt;
       if (this.flowTimer <= 0) {
         this.buildFlow();
@@ -224,7 +278,7 @@ export class Simulation {
       this.updateBullets(dt);
       this.cleanupEnemies();
     }
-    if (this.player.hp <= 0) {
+    if (!this.training && this.player.hp <= 0) {
       this.player.hp = 0;
       this.phase = 'lost';
       this.hint = { key: 'runInterrupted' };
@@ -245,11 +299,15 @@ export class Simulation {
     if (input.switchWeapon && this.inventory.length > 1) {
       const n = (this.inventory.indexOf(p.weapon) + 1) % this.inventory.length;
       p.weapon = this.inventory[n];
+      if (this.training) this.trainingDone.add('switch');
       p.ammo = this.weapon.magazine;
       p.reloadRemaining = this.weapon.reload;
       this.emit('reload', p);
     }
-    if (input.reload) this.reload();
+    if (input.reload) {
+      this.reload();
+      if (this.training) this.trainingDone.add('reload');
+    }
     const move = normalize(input.move);
     p.moving = move.x !== 0 || move.y !== 0;
     if (input.dash && p.dashCooldown <= 0) {
@@ -258,6 +316,7 @@ export class Simulation {
       p.dashCooldown = this.skills.includes('nova') ? 1.65 : 2.2;
       p.invincible = 0.32;
       this.emit('dash', p, { color: 0xfab583 });
+      if (this.training) this.trainingDone.add('dash');
       if (this.skills.includes('nova')) this.explode({ ...p }, 145, 65, false);
     }
     if (p.dashRemaining > 0) {
@@ -267,6 +326,7 @@ export class Simulation {
     if (input.firing && this.phase === 'combat' && p.shotCooldown <= 0 && p.reloadRemaining <= 0) {
       if (p.ammo > 0) {
         this.fire(p, p.angle, p.weapon, 'player');
+        if (this.training) this.trainingDone.add('shoot');
         p.ammo--;
         p.shotCooldown = this.weapon.interval / (this.skills.includes('haste') ? 1.25 : 1);
       } else this.reload();
@@ -291,6 +351,7 @@ export class Simulation {
           p.ammo = this.weapon.magazine;
           p.reloadRemaining = 0;
           this.emit('pickup', p, { text: this.weapon.name, color: this.weapon.color });
+          if (this.training) this.trainingDone.add('pickup');
         } else if (item.kind === 'module') {
           this.upgradeSource = this.phase === 'exit' ? 'clear' : 'field';
           const available = SKILLS.filter((s) => !this.skills.includes(s.id)).map((s) => s.id);
@@ -369,6 +430,7 @@ export class Simulation {
       { x: p.x + Math.cos(angle) * 30, y: p.y + Math.sin(angle) * 30 },
       { color: isPlayer ? w.color : 0x99ccbe, value: angle, loud: isPlayer },
     );
+    if (isPlayer) this.shotsFired++;
   }
   private updateAlly(dt: number) {
     if (!this.squad) return;
@@ -463,6 +525,23 @@ export class Simulation {
   private updateEnemies(dt: number) {
     for (const e of this.enemies) {
       if (e.hp <= 0) continue;
+      if (this.training) {
+        e.age += dt;
+        e.flash = Math.max(0, e.flash - dt);
+        if (e.knock) {
+          const speed = Math.hypot(e.knock.x, e.knock.y);
+          if (speed > 1) {
+            this.move(e, normalize(e.knock), speed * dt, e.radius);
+            const decay = Math.exp(-dt * 11);
+            e.knock.x *= decay;
+            e.knock.y *= decay;
+          } else {
+            e.knock.x = 0;
+            e.knock.y = 0;
+          }
+        }
+        continue;
+      }
       e.age += dt;
       e.flash = Math.max(0, e.flash - dt);
       e.slow = Math.max(0, e.slow - dt);
@@ -683,6 +762,18 @@ export class Simulation {
   }
   private cleanupEnemies() {
     for (const e of this.enemies.filter((e) => e.hp <= 0 && !e.deathHandled)) {
+      if (this.training && e.home) {
+        e.hp = e.maxHp;
+        e.x = e.home.x;
+        e.y = e.home.y;
+        e.flash = 0;
+        e.knock = undefined;
+        e.stuck = 0;
+        e.charge = 0;
+        e.windup = 0;
+        e.deathHandled = false;
+        continue;
+      }
       e.deathHandled = true;
       this.kills++;
       this.roomKills++;
