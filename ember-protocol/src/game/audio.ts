@@ -45,7 +45,7 @@ export class AudioEngine {
   private echo?: DelayNode;
   private noise?: AudioBuffer;
   private musicTimer?: number;
-  private step = 0;
+  private stepCounter = 0;
   private nextStepTime = 0;
   private combat = false;
   /** Tempo 100 BPM; one step is a sixteenth note. */
@@ -197,7 +197,7 @@ export class AudioEngine {
   /** Lookahead scheduler keeping ~150ms of music queued on the audio clock. */
   private startMusic() {
     if (this.musicTimer || !this.context) return;
-    this.step = 0;
+    this.stepCounter = 0;
     this.nextStepTime = this.context.currentTime + 0.1;
     this.musicTimer = window.setInterval(() => this.scheduleMusic(), 40);
   }
@@ -210,36 +210,39 @@ export class AudioEngine {
   private scheduleMusic() {
     if (!this.context || !this.musicBus) return;
     while (this.nextStepTime < this.context.currentTime + 0.15) {
-      this.scheduleStep(this.step, this.nextStepTime);
-      this.step = (this.step + 1) % 64;
+      this.scheduleStep(
+        this.stepCounter % 64,
+        this.nextStepTime,
+        Math.floor(this.stepCounter / 64),
+      );
+      this.stepCounter++;
       this.nextStepTime += AudioEngine.STEP;
     }
   }
-  private scheduleStep(step: number, t: number) {
+  private scheduleStep(step: number, t: number, loopIndex: number) {
     const bar = Math.floor(step / 16),
       inBar = step % 16,
       stepDur = AudioEngine.STEP,
       barDur = stepDur * 16;
+    // Landing page: ambient pads, soft bass and the theme every other loop.
+    // Battlefield: the full band — drums, driving bass, theme and crash each loop.
     const note = AudioEngine.MELODY.find((n) => n.step === step);
-    if (note) this.melody(note.freq, t, note.len * stepDur);
+    if (note && (this.combat || loopIndex % 2 === 0)) this.melody(note.freq, t, note.len * stepDur);
     if (inBar === 0) {
       this.pad(AudioEngine.BAR_PADS[bar], t, barDur);
       if (this.combat) this.crash(t);
+      if (this.combat && bar === 3) this.riser(t, stepDur * 16);
     }
-    // Ostinato bass: driving eighths with octave jumps on the off-beats.
     if (this.combat && inBar % 2 === 0) {
       const root = AudioEngine.BAR_ROOTS[bar];
       this.bass(inBar === 6 || inBar === 14 ? root * 2 : root, t, stepDur * 1.7);
-    } else if (!this.combat && inBar % 4 === 0) {
-      this.bass(AudioEngine.BAR_ROOTS[bar], t, stepDur * 3.4);
+    } else if (!this.combat && inBar % 8 === 0) {
+      this.bass(AudioEngine.BAR_ROOTS[bar], t, stepDur * 6);
     }
     if (this.combat) {
       if (inBar === 0 || inBar === 6 || inBar === 10) this.kick(t);
       if (inBar === 8) this.snare(t);
       if (inBar % 2 === 1) this.hat(t, inBar % 4 === 3 ? 0.1 : 0.055);
-    } else {
-      if (inBar === 0 || inBar === 8) this.kick(t);
-      if (inBar % 4 === 2) this.hat(t, 0.045);
     }
   }
   private applyMusicGain() {
