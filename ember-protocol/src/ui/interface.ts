@@ -18,6 +18,11 @@ export class Interface {
   private timer: number;
   private unsubscribeLanguage: () => void = () => undefined;
   private nodes: Record<string, HTMLElement> = {};
+  private guideOpen = false;
+  private guideTab: 'story' | 'controls' | 'practice' = 'story';
+  private guideStep = 0;
+  private readonly guideChapters = 4;
+  private trainKey = '';
 
   constructor(
     private model: Simulation,
@@ -30,7 +35,7 @@ export class Interface {
         <header class="topbar">
           <a class="brand" href="#" data-action="home" data-i18n-aria="homeLabel" aria-label="${t('homeLabel')}"><span class="brand-mark">${icon('bolt', 27)}</span><span><span data-i18n="brandName">${t('brandName')}</span><small data-i18n="brandSubtitle">${t('brandSubtitle')}</small></span></a>
           <nav class="route" data-i18n-aria="progressLabel" aria-label="${t('progressLabel')}">${LEVELS.map((level, i) => `<div class="route-node" data-room="${i}"><span>0${i + 1}</span><div data-level-name="${i}">${this.i18n.text(level.name)}</div></div>${i < LEVELS.length - 1 ? '<i></i>' : ''}`).join('')}</nav>
-          <div class="tools"><span class="build-tag">PLAYABLE DEMO <b>0.2</b></span><button class="icon-button language-button" data-action="language" data-i18n-title="languageTitle" data-i18n-aria="languageTitle" title="${t('languageTitle')}" aria-label="${t('languageTitle')}"><span id="language-label">${this.i18n.isChinese ? 'EN' : '中文'}</span></button><button class="icon-button" data-action="sound" data-i18n-title="soundToggle" data-i18n-aria="soundToggle" title="${t('soundToggle')}" aria-label="${t('soundToggle')}">${icon('volume')}</button><div class="sound-panel" id="sound-panel"></div><button class="icon-button" data-action="pause" data-i18n-aria="pauseGame" data-i18n-title="pauseTitle" aria-label="${t('pauseGame')}" title="${t('pauseTitle')}">${icon('pause')}</button><button class="icon-button" data-action="fullscreen" data-i18n-aria="fullscreen" data-i18n-title="fullscreen" aria-label="${t('fullscreen')}" title="${t('fullscreen')}">${icon('full')}</button></div>
+          <div class="tools"><span class="build-tag">PLAYABLE DEMO <b>0.2</b></span><button class="icon-button language-button" data-action="language" data-i18n-title="languageTitle" data-i18n-aria="languageTitle" title="${t('languageTitle')}" aria-label="${t('languageTitle')}"><span id="language-label">${this.i18n.isChinese ? 'EN' : '中文'}</span></button><button class="icon-button" data-action="sound" data-i18n-title="soundToggle" data-i18n-aria="soundToggle" title="${t('soundToggle')}" aria-label="${t('soundToggle')}">${icon('volume')}</button><div class="sound-panel" id="sound-panel"></div><button class="icon-button" data-action="guide" data-i18n-title="guideButton" data-i18n-aria="guideButton" title="${t('guideButton')}" aria-label="${t('guideButton')}">${icon('book', 18)}</button><button class="icon-button" data-action="pause" data-i18n-aria="pauseGame" data-i18n-title="pauseTitle" aria-label="${t('pauseGame')}" title="${t('pauseTitle')}">${icon('pause')}</button><button class="icon-button" data-action="fullscreen" data-i18n-aria="fullscreen" data-i18n-title="fullscreen" aria-label="${t('fullscreen')}" title="${t('fullscreen')}">${icon('full')}</button></div>
         </header>
         <main class="workspace">
           <section class="field-wrap">
@@ -43,6 +48,8 @@ export class Interface {
                 <div class="boss-bar" id="boss-bar"><div><b data-i18n="bossName">${t('bossName')}</b><span>THE SPORE WARDEN</span></div><i><em id="boss-fill"></em></i></div>
                 <div class="combat-hud"><div class="health-card"><div class="health-title">${icon('plus', 15)}<span data-i18n="health">${t('health')}</span><b id="health-value">100 <small>/ 100</small></b></div><div class="health-track"><i id="health-fill"></i></div><div class="dash-line"><span><span data-i18n="dashThruster">${t('dashThruster')}</span> <kbd>SPACE</kbd></span><b id="dash-value">${t('ready')}</b></div><div class="dash-track"><i id="dash-fill"></i></div></div><div class="ammo-card"><div class="ammo-icon">${icon('target', 16)} <span id="ammo-name"></span></div><div><strong id="ammo-value">30</strong><span id="ammo-max">/ 30</span><kbd>R</kbd></div></div></div>
                 <div id="interaction" class="interaction"></div><div id="combo" class="combo"></div>
+                <div id="training" class="training-panel hidden"></div>
+                <div id="coach" class="coach-layer"></div>
               </div>
               <div id="overlay" class="overlay"></div>
             </div></div>
@@ -56,6 +63,7 @@ export class Interface {
           </aside>
         </main>
         <footer><div class="controls"><span><kbd>W A S D</kbd> <span data-i18n="move">${t('move')}</span></span><span>${icon('mouse', 15)} <span data-i18n="aimFire">${t('aimFire')}</span></span><span><kbd>SPACE</kbd> <span data-i18n="dash">${t('dash')}</span></span><span><kbd>E</kbd> <span data-i18n="pickupEnter">${t('pickupEnter')}</span></span><span><kbd>R</kbd> <span data-i18n="reload">${t('reload')}</span></span><span><kbd>ESC</kbd> <span data-i18n="pause">${t('pause')}</span></span></div><span class="footer-note" data-i18n="footerMotto">${t('footerMotto')}</span></footer>
+      <div id="guide" class="guide-overlay hidden"></div>
       </div>`;
 
     document.querySelectorAll<HTMLElement>('[id]').forEach((element) => {
@@ -68,6 +76,11 @@ export class Interface {
     this.unsubscribeLanguage = this.i18n.subscribe(() => this.applyLanguage());
     this.timer = window.setInterval(() => this.refresh(), 70);
     this.applyLanguage();
+    try {
+      if (!localStorage.getItem('ember-protocol-onboarded')) this.openGuide();
+    } catch {
+      this.openGuide();
+    }
   }
 
   private onVisibilityChange = () => {
@@ -159,6 +172,27 @@ export class Interface {
     if (action === 'toggleMusic') this.audio.setMusicMuted(!this.audio.musicMuted);
     if (action === 'toggleSfx') this.audio.setSfxMuted(!this.audio.sfxMuted);
     if (action === 'language') this.i18n.toggle();
+    if (action === 'guide') this.openGuide();
+    if (action === 'guideClose' || action === 'guideSkip') this.closeGuide();
+    if (action === 'guideLang') this.i18n.toggle();
+    if (action === 'guideTab')
+      this.guideTab = (button.dataset.tab as 'story' | 'controls' | 'practice') ?? this.guideTab;
+    if (action === 'guideStep') {
+      const dir = button.dataset.dir === 'next' ? 1 : -1;
+      this.guideStep = Math.min(this.guideChapters - 1, Math.max(0, this.guideStep + dir));
+      if (dir > 0 && this.guideStep === this.guideChapters - 1) this.guideTab = 'controls';
+    }
+    if (action === 'guideStart') {
+      this.closeGuide();
+      this.model.start(this.squad);
+      this.overlayKey = '';
+    }
+    if (action === 'train') {
+      this.closeGuide();
+      this.model.beginTraining();
+      this.overlayKey = '';
+    }
+    if (action === 'trainEnd') this.model.endTraining();
     if (action === 'fullscreen') {
       if (document.fullscreenElement) void document.exitFullscreen();
       else
@@ -168,6 +202,11 @@ export class Interface {
           .catch(() => this.showNotice(this.i18n.t('fullscreenUnavailable')));
     }
     if (action === 'skill') this.model.chooseSkill(button.dataset.skill as SkillId);
+    // Guide navigation (Next/Prev/chapter + tab switch) changes state but the
+    // 70ms refresh() loop does not repaint the guide, so repaint it explicitly
+    // here — otherwise the buttons appear unresponsive.
+    if (this.guideOpen && action === 'guideStep') this.renderGuide();
+    if (this.guideOpen && action === 'guideTab') this.renderGuide();
     this.refresh();
   };
 
@@ -204,6 +243,7 @@ export class Interface {
     this.weaponKey = '';
     this.skillKey = '';
     this.updateSound();
+    if (this.guideOpen) this.renderGuide();
     this.refresh();
   }
 
@@ -322,6 +362,8 @@ export class Interface {
     }
     this.renderSoundPanel();
     this.renderOverlay();
+    this.renderTraining();
+    this.renderCoach();
   }
 
   private renderSoundPanel() {
@@ -365,8 +407,170 @@ export class Interface {
       overlay.innerHTML = `<div class="result-modal"><div class="result-emblem">${icon(won ? 'flag' : 'shield', 44)}</div><div class="eyebrow">${won ? 'MISSION COMPLETE' : 'SIGNAL LOST'}</div><h2>${t(won ? 'wonTitle' : 'lostTitle')}</h2><p>${t(won ? 'wonDescription' : 'lostDescription')}</p><div class="result-stats"><div><b>${m.kills}</b><small>${t('enemiesCleared')}</small></div><div><b>${m.bestCombo}</b><small>${t('bestCombo')}</small></div><div><b>${Math.floor(m.elapsed / 60)}:${String(Math.floor(m.elapsed % 60)).padStart(2, '0')}</b><small>${t('runTime')}</small></div></div><button class="start-button" data-action="start"><span>${t('retry')}</span>${icon('reset')}</button><button class="text-button" data-action="home">${t('returnHome')}</button></div>`;
     } else if (m.paused) {
       overlay.classList.add('modal-overlay');
-      overlay.innerHTML = `<div class="pause-modal"><div class="eyebrow">TAKE A BREATH</div><h2>${t('pauseHeading')}</h2><p>${t('pauseDescription')}</p><button class="start-button" data-action="resume"><span>${t('resume')}</span>${icon('play')}</button><button class="text-button" data-action="home">${t('endRun')}</button><div class="pause-controls"><span>${t('controlMoveFire')}</span><span>${t('controlDashReload')}</span><span>${t('controlPickupSwitch')}</span></div></div>`;
+      overlay.innerHTML = `<div class="pause-modal"><div class="eyebrow">TAKE A BREATH</div><h2>${t('pauseHeading')}</h2><p>${t('pauseDescription')}</p><button class="start-button" data-action="resume"><span>${t('resume')}</span>${icon('play')}</button><button class="text-button" data-action="home">${t('endRun')}</button>      <div class="pause-controls"><span>${t('controlMoveFire')}</span><span>${t('controlDashReload')}</span><span>${t('controlPickupSwitch')}</span></div></div>`;
     }
+  }
+
+  private openGuide() {
+    this.guideOpen = true;
+    if (['combat', 'exit'].includes(this.model.phase)) this.model.paused = true;
+    this.guideTab = 'story';
+    this.guideStep = 0;
+    this.renderGuide();
+  }
+  private closeGuide() {
+    this.guideOpen = false;
+    if (['combat', 'exit'].includes(this.model.phase) && !this.model.training)
+      this.model.paused = false;
+    try {
+      localStorage.setItem('ember-protocol-onboarded', '1');
+    } catch {
+      // Onboarding flag is a convenience; ignoring storage is safe.
+    }
+    this.renderGuide();
+  }
+  private guideTabBtn(tab: 'story' | 'controls' | 'practice', label: string) {
+    return `<button class="guide-tab ${this.guideTab === tab ? 'on' : ''}" data-action="guideTab" data-tab="${tab}">${label}</button>`;
+  }
+  private ctrlRow(key: string, label: string) {
+    return `<div class="ctrl-row"><kbd>${key}</kbd><span>${label}</span></div>`;
+  }
+  private renderGuide() {
+    const g = this.nodes['guide'];
+    if (!g) return;
+    g.classList.toggle('hidden', !this.guideOpen);
+    if (!this.guideOpen) {
+      g.innerHTML = '';
+      return;
+    }
+    const t = (key: TranslationKey) => this.i18n.t(key);
+    const chapterTitle = `storyCh${this.guideStep + 1}Title` as TranslationKey;
+    const chapterBody = `storyCh${this.guideStep + 1}` as TranslationKey;
+    const storyTab = `
+      <div class="story-wrap">
+        <div class="eyebrow"><span></span> ${t('storyEyebrow')}</div>
+        <div class="chapter in">
+          <h3>${t(chapterTitle)}</h3>
+          <p>${t(chapterBody)}</p>
+        </div>
+        <div class="progress">${[1, 2, 3, 4].map((i) => `<i class="${i - 1 === this.guideStep ? 'on' : ''}"></i>`).join('')}</div>
+        <div class="guide-nav">
+          <button class="text-button" data-action="guideStep" data-dir="prev" ${this.guideStep === 0 ? 'disabled' : ''}>${icon('arrow', 14)} ${t('guidePrev')}</button>
+          ${
+            this.guideStep < this.guideChapters - 1
+              ? `<button class="start-button guide-next" data-action="guideStep" data-dir="next"><span>${t('guideNext')}</span>${icon('arrow', 18)}</button>`
+              : `<button class="start-button guide-next" data-action="guideTab" data-tab="controls"><span>${t('controlsTitle')}</span>${icon('arrow', 18)}</button>`
+          }
+        </div>
+      </div>`;
+    const controlsTab = `
+      <div class="controls-wrap">
+        <div class="eyebrow"><span></span> ${t('controlsTitle')}</div>
+        <div class="controls-list">
+          ${this.ctrlRow('W A S D', t('ctrlMove'))}
+          ${this.ctrlRow(icon('mouse', 15) + ' L', t('ctrlAim'))}
+          ${this.ctrlRow('SPACE / SHIFT', t('ctrlDash'))}
+          ${this.ctrlRow('R', t('ctrlReload'))}
+          ${this.ctrlRow('E', t('ctrlInteract'))}
+          ${this.ctrlRow('Q', t('ctrlSwitch'))}
+          ${this.ctrlRow('ESC', t('ctrlPause'))}
+        </div>
+        <div class="practice-actions">
+          <button class="start-button" data-action="guideStart"><span>${t('guideStart')}</span>${icon('arrow', 18)}</button>
+          <button class="text-button" data-action="guideTab" data-tab="practice">${t('guidePractice')}</button>
+        </div>
+      </div>`;
+    const practiceTab = `
+      <div class="practice-wrap">
+        <div class="eyebrow"><span></span> ${t('practiceTitle')}</div>
+        <p class="guide-lead">${t('practiceIntro')}</p>
+        <div class="practice-actions">
+          <button class="start-button" data-action="train"><span>${t('guidePractice')}</span>${icon('arrow', 18)}</button>
+          <button class="text-button" data-action="guideStart">${t('guideStart')}</button>
+        </div>
+      </div>`;
+    const tabContent =
+      this.guideTab === 'story'
+        ? storyTab
+        : this.guideTab === 'controls'
+          ? controlsTab
+          : practiceTab;
+    g.innerHTML = `
+      <div class="guide-card">
+        <div class="guide-head">
+          <div class="guide-brand">${icon('book', 18)} <b>${t('guideTitle')}</b></div>
+          <div class="guide-head-tools">
+            <button class="icon-button language-button" data-action="guideLang" title="${t('languageTitle')}">${this.i18n.isChinese ? 'EN' : '中文'}</button>
+            <button class="icon-button" data-action="guideClose" aria-label="${t('guideClose')}" title="${t('guideClose')}">✕</button>
+          </div>
+        </div>
+        <div class="guide-tabs">
+          ${this.guideTabBtn('story', t('tabStory'))}
+          ${this.guideTabBtn('controls', t('tabControls'))}
+          ${this.guideTabBtn('practice', t('tabPractice'))}
+        </div>
+        <div class="guide-body">${tabContent}</div>
+      </div>`;
+  }
+  private renderTraining() {
+    const el = this.nodes['training'];
+    if (!el) return;
+    const show = this.model.training;
+    el.classList.toggle('hidden', !show);
+    if (!show) {
+      el.innerHTML = '';
+      this.trainKey = '';
+      return;
+    }
+    const t = (key: TranslationKey) => this.i18n.t(key);
+    const done = this.model.trainingDone;
+    const complete =
+      done.has('shoot') && done.has('switch') && done.has('dash') && done.has('pickup');
+    const key = `${complete}|${[...done].sort().join(',')}`;
+    if (key === this.trainKey) return;
+    this.trainKey = key;
+    const step = (id: string, k: TranslationKey) =>
+      `<div class="train-step ${done.has(id) ? 'done' : ''}"><span class="train-check">${done.has(id) ? icon('check', 14) : ''}</span><span>${t(k)}</span></div>`;
+    el.innerHTML = `
+      <div class="train-head"><b>${t('trainTitle')}</b><span>${t('trainHint')}</span></div>
+      <div class="train-steps">
+        ${step('shoot', 'trainShoot')}
+        ${step('switch', 'trainSwitch')}
+        ${step('dash', 'trainDash')}
+        ${step('pickup', 'trainPickup')}
+        ${step('reload', 'trainReload')}
+      </div>
+      ${
+        complete
+          ? `<div class="train-done">${t('trainDone')}</div><button class="start-button train-exit" data-action="trainEnd"><span>${t('trainExit')}</span>${icon('arrow', 18)}</button>`
+          : ''
+      }`;
+  }
+  private renderCoach() {
+    const el = this.nodes['coach'];
+    if (!el) return;
+    const m = this.model;
+    if (m.levelIndex !== 0 || m.phase === 'won' || m.phase === 'lost') {
+      el.innerHTML = '';
+      return;
+    }
+    const t = (key: TranslationKey) => this.i18n.t(key);
+    const shell = document.querySelector('.arena-shell') as HTMLElement | null;
+    if (!shell) return;
+    const r = shell.getBoundingClientRect();
+    const sx = r.width / 1280;
+    const sy = r.height / 800;
+    const place = (wx: number, wy: number) =>
+      `left:${(wx * sx).toFixed(1)}px;top:${(wy * sy).toFixed(1)}px;`;
+    let html = '';
+    const wp = m.pickups.find((p) => p.kind === 'weapon');
+    if (wp)
+      html += `<div class="coach-pickup" style="${place(wp.x, wp.y - 50)}"><kbd>E</kbd><span>${t('ctrlInteract')}</span></div>`;
+    if (m.phase === 'exit')
+      html += `<div class="coach-portal" style="${place(1145, 330)}"><span>→</span><small>${t('roomPortalHint')}</small></div>`;
+    if (m.shotsFired === 0 && !m.training)
+      html += `<div class="coach-shoot">${t('roomShootHint')}</div>`;
+    el.innerHTML = html;
   }
 
   destroy() {

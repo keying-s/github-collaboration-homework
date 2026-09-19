@@ -23,6 +23,7 @@ const paths: Record<string, string> = {
   reset: '<path d="M3 11a9 9 0 1 1 2 7M3 3v8h8"/>',
   mouse: '<rect x="6" y="2" width="12" height="20" rx="6"/><path d="M12 2v8M6 10h12"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/>',
+  book: '<path d="M12 6.4c-1.9-1.3-4.2-2-6.2-2v13.8c2 0 4.3.7 6.2 2 1.9-1.3 4.2-2 6.2-2V4.4c-2 0-4.3.7-6.2 2z"/><path d="M12 6.4V19.2"/>',
 };
 export function icon(name: string, size = 20) {
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] ?? paths.bolt}</svg>`;

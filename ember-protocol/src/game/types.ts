@@ -84,6 +84,7 @@ export interface Enemy extends Vec {
   knock?: Vec;
   cause?: KillCause;
   stuck?: number;
+  home?: Vec;
 }
 export interface Bullet extends Vec {
   id: number;

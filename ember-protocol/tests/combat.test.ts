@@ -386,3 +386,42 @@ test('kill hitstop is short, bounded and never accumulates across kills', () => 
     assert.equal(m.freeze, 0);
   }
 });
+
+test('training mode is a safe sandbox: no damage, dummies respawn, drills are tracked', () => {
+  const m = new Simulation(seededRandom(7));
+  m.beginTraining();
+  assert.equal(m.training, true);
+  assert.equal(m.phase, 'combat');
+  assert.ok(m.player.invincible > 0, 'player is invincible in training');
+  assert.ok(m.enemies.length >= 3, 'training spawns stationary dummies');
+  // Firing marks the shoot drill and never harms the player.
+  step(m, 0.3, { firing: true });
+  assert.ok(m.trainingDone.has('shoot'));
+  assert.equal(m.player.hp, m.player.maxHp);
+  // Dashing marks the dash drill.
+  m.tick(1 / 60, { ...idle, move: { x: 1, y: 0 }, dash: true });
+  assert.ok(m.trainingDone.has('dash'));
+  // Picking up the level-1 weapon marks pickup, then switching marks switch.
+  m.player.x = 494;
+  m.player.y = 425;
+  m.tick(1 / 60, { ...idle, interact: true });
+  assert.ok(m.trainingDone.has('pickup'));
+  assert.ok(m.inventory.includes('shotgun'));
+  m.tick(1 / 60, { ...idle, switchWeapon: true });
+  assert.ok(m.trainingDone.has('switch'));
+  // Dummies that reach 0 hp respawn instead of vanishing.
+  for (const e of m.enemies) {
+    e.hp = 0;
+    e.deathHandled = false;
+  }
+  m.tick(1 / 60, idle);
+  assert.equal(
+    m.enemies.filter((e) => e.hp > 0).length,
+    m.enemies.length,
+    'training dummies respawn',
+  );
+  // Leaving training returns to the menu.
+  m.endTraining();
+  assert.equal(m.training, false);
+  assert.equal(m.phase, 'menu');
+});
