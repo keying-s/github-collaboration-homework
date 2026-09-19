@@ -9,6 +9,7 @@ import { gunIcon, icon } from './icons';
 export class Interface {
   private squad = false;
   private startWeapon: WeaponId = 'rifle';
+  private loadoutOpen = false;
   private overlayKey = '';
   private weaponKey = '';
   private skillKey = '';
@@ -73,6 +74,13 @@ export class Interface {
   };
 
   private onKey = (event: KeyboardEvent) => {
+    if (this.loadoutOpen && (event.code === 'Escape' || event.code === 'KeyP')) {
+      event.preventDefault();
+      this.loadoutOpen = false;
+      this.overlayKey = '';
+      this.refresh();
+      return;
+    }
     if (event.code === 'Escape' || event.code === 'KeyP') {
       event.preventDefault();
       this.togglePause();
@@ -98,7 +106,19 @@ export class Interface {
       this.squad = action === 'squad';
       this.overlayKey = '';
     }
-    if (action === 'weapon') this.startWeapon = button.dataset.weapon as WeaponId;
+    if (action === 'pickGun' && this.model.phase === 'menu') {
+      this.loadoutOpen = true;
+      this.overlayKey = '';
+    }
+    if (action === 'selectGun') {
+      this.startWeapon = button.dataset.weapon as WeaponId;
+      this.loadoutOpen = false;
+      this.overlayKey = '';
+    }
+    if (action === 'closeGun') {
+      this.loadoutOpen = false;
+      this.overlayKey = '';
+    }
     if (action === 'pause' || action === 'resume') this.togglePause();
     if (action === 'home') {
       this.model.start(this.squad, this.startWeapon);
@@ -249,11 +269,17 @@ export class Interface {
             : '';
     });
 
-    const weaponKey = `${p.weapon}-${m.inventory.join()}-${this.i18n.locale}`;
+    const shownWeapon = WEAPONS[menu ? this.startWeapon : p.weapon];
+    const weaponKey = `${menu}-${this.startWeapon}-${this.loadoutOpen}-${p.weapon}-${m.inventory.join()}-${this.i18n.locale}`;
     if (weaponKey !== this.weaponKey) {
       this.weaponKey = weaponKey;
-      this.nodes['weapon-card'].innerHTML =
-        `<div class="weapon-art">${gunIcon(p.weapon)}<span>0${m.inventory.indexOf(p.weapon) + 1}</span></div><div class="weapon-name"><h3>${this.i18n.text(m.weapon.name)}</h3><span>${m.weapon.id.toUpperCase()}</span></div><div class="weapon-type">${this.i18n.text(m.weapon.label)}</div><p>${this.i18n.text(m.weapon.description)}</p><div class="weapon-bars"><span>${text('firepower')} <i><b style="width:${p.weapon === 'shotgun' ? 90 : p.weapon === 'arc' ? 43 : 62}%"></b></i></span><span>${text('fireRate')} <i><b style="width:${p.weapon === 'shotgun' ? 28 : p.weapon === 'arc' ? 96 : 69}%"></b></i></span></div>`;
+      const powerBar = shownWeapon.id === 'shotgun' ? 90 : shownWeapon.id === 'arc' ? 43 : 62;
+      const rateBar = shownWeapon.id === 'shotgun' ? 28 : shownWeapon.id === 'arc' ? 96 : 69;
+      const slot = menu ? 1 : m.inventory.indexOf(p.weapon) + 1;
+      const card = `<div class="weapon-art">${gunIcon(shownWeapon.id)}<span>0${slot}</span></div><div class="weapon-name"><h3>${this.i18n.text(shownWeapon.name)}</h3><span>${shownWeapon.id.toUpperCase()}</span></div><div class="weapon-type">${this.i18n.text(shownWeapon.label)}</div><p>${this.i18n.text(shownWeapon.description)}</p><div class="weapon-bars"><span>${text('firepower')} <i><b style="width:${powerBar}%"></b></i></span><span>${text('fireRate')} <i><b style="width:${rateBar}%"></b></i></span></div>`;
+      this.nodes['weapon-card'].innerHTML = menu
+        ? `<button class="weapon-card-button" data-action="pickGun" title="${this.i18n.text(shownWeapon.description)}">${card}</button><p class="loadout-hint">${icon('arrow', 12)} ${text('loadoutHint')}</p>`
+        : card;
     }
     const skillKey = `${m.skills.join()}-${this.i18n.locale}`;
     if (skillKey !== this.skillKey || !this.nodes['skills-list'].innerHTML) {
@@ -271,7 +297,7 @@ export class Interface {
     this.renderOverlay();
   }
 
-  private weaponCard(weapon: Weapon): string {
+  private loadoutOption(weapon: Weapon): string {
     const t = (key: TranslationKey) => this.i18n.t(key);
     const stats = [
       `${t('statDamage')} <b>${weapon.pellets > 1 ? `${weapon.damage}×${weapon.pellets}` : weapon.damage}</b>`,
@@ -280,27 +306,30 @@ export class Interface {
       `${t('statReload')} <b>${weapon.reload.toFixed(2)}s</b>`,
       `${t('statRange')} <b>${weapon.range}</b>`,
     ];
-    return `<button class="weapon-option${weapon.id === this.startWeapon ? ' selected' : ''}" data-action="weapon" data-weapon="${weapon.id}" style="--gun-accent:#${weapon.color.toString(16).padStart(6, '0')}" aria-pressed="${weapon.id === this.startWeapon}" title="${this.i18n.text(weapon.description)}"><div class="weapon-option-body"><div class="weapon-option-head"><h3>${this.i18n.text(weapon.name)}</h3><span>${this.i18n.text(weapon.label)}</span></div><div class="weapon-option-stats">${stats.map((stat) => `<span>${stat}</span>`).join('')}</div></div></button>`;
+    return `<button class="loadout-option${weapon.id === this.startWeapon ? ' selected' : ''}" data-action="selectGun" data-weapon="${weapon.id}" style="--gun-accent:#${weapon.color.toString(16).padStart(6, '0')}" aria-pressed="${weapon.id === this.startWeapon}"><span class="loadout-option-art">${gunIcon(weapon.id)}</span><div class="loadout-option-body"><div class="loadout-option-head"><h3>${this.i18n.text(weapon.name)}</h3><span>${this.i18n.text(weapon.label)}</span></div><p>${this.i18n.text(weapon.description)}</p><div class="loadout-option-stats">${stats.map((stat) => `<span>${stat}</span>`).join('')}</div></div><span class="loadout-check">${weapon.id === this.startWeapon ? icon('check', 16) : ''}</span></button>`;
   }
 
   private renderOverlay() {
     const m = this.model;
     const t = (key: TranslationKey) => this.i18n.t(key);
-    const key = `${m.phase}-${m.paused}-${this.squad}-${this.startWeapon}-${m.skills.join()}-${this.i18n.locale}`;
+    const key = `${m.phase}-${m.paused}-${this.squad}-${this.loadoutOpen}-${this.startWeapon}-${m.skills.join()}-${this.i18n.locale}`;
     if (key === this.overlayKey) return;
     this.overlayKey = key;
     const overlay = this.nodes.overlay;
     overlay.className = 'overlay';
     overlay.innerHTML = '';
-    if (m.phase === 'menu') {
-      overlay.classList.add('menu-overlay');
-      overlay.innerHTML = `<div class="menu-content"><div class="eyebrow"><span></span> ${t('menuEyebrow')}</div><h1>${t('heroLine1')}<br><em>${t('heroLine2')}</em></h1><p class="menu-description">${t('menuDescription1')}<br>${t('menuDescription2')}</p><div class="mode-switch" role="group" aria-label="${t('operationMode')}"><button data-action="solo" class="${!this.squad ? 'selected' : ''}">${icon('person', 18)} ${t('soloAction')}</button><button data-action="squad" class="${this.squad ? 'selected' : ''}">${icon('people', 19)} ${t('aiCompanion')}</button></div><div class="weapon-select" role="group" aria-label="${t('chooseWeapon')}"><div class="weapon-select-title">${t('chooseWeapon')}</div><div class="weapon-options">${Object.values(
+    if (m.phase === 'menu' && this.loadoutOpen) {
+      overlay.classList.add('modal-overlay');
+      overlay.innerHTML = `<div class="loadout-modal"><div class="eyebrow">${t('menuEyebrow')}</div><h2>${t('chooseWeapon')}</h2><div class="loadout-options">${Object.values(
         WEAPONS,
       )
-        .map((weapon) => this.weaponCard(weapon))
+        .map((weapon) => this.loadoutOption(weapon))
         .join(
           '',
-        )}</div></div><button class="start-button" data-action="start"><span>${t('enterZone')}</span>${icon('arrow', 22)}</button><div class="menu-meta"><span>${t('threeAreas')}</span><i></i><span>${t('threeWeapons')}</span><i></i><span>${t('sixSkills')}</span></div><div class="menu-tip">${icon('info', 14)} ${t('desktopTip')}</div></div><div class="arena-stamp"><span>FIELD TEST</span><strong>01—03</strong><small>${t('runMotto')}</small></div>`;
+        )}</div><button class="text-button" data-action="closeGun">${t('backLabel')}</button></div>`;
+    } else if (m.phase === 'menu') {
+      overlay.classList.add('menu-overlay');
+      overlay.innerHTML = `<div class="menu-content"><div class="eyebrow"><span></span> ${t('menuEyebrow')}</div><h1>${t('heroLine1')}<br><em>${t('heroLine2')}</em></h1><p class="menu-description">${t('menuDescription1')}<br>${t('menuDescription2')}</p><div class="mode-switch" role="group" aria-label="${t('operationMode')}"><button data-action="solo" class="${!this.squad ? 'selected' : ''}">${icon('person', 18)} ${t('soloAction')}</button><button data-action="squad" class="${this.squad ? 'selected' : ''}">${icon('people', 19)} ${t('aiCompanion')}</button></div><button class="start-button" data-action="start"><span>${t('enterZone')}</span>${icon('arrow', 22)}</button><div class="menu-meta"><span>${t('threeAreas')}</span><i></i><span>${t('threeWeapons')}</span><i></i><span>${t('sixSkills')}</span></div><div class="menu-tip">${icon('info', 14)} ${t('desktopTip')}</div></div><div class="arena-stamp"><span>FIELD TEST</span><strong>01—03</strong><small>${t('runMotto')}</small></div>`;
     } else if (m.phase === 'upgrade') {
       overlay.classList.add('modal-overlay');
       overlay.innerHTML = `<div class="upgrade-modal"><div class="eyebrow">${t('upgradeEyebrow')}</div><h2>${t('upgradeTitle1')}<em>${t('upgradeTitle2')}</em></h2><p>${t('upgradeDescription')}</p><div class="upgrade-options">${m.options.map((skill, i) => `<button class="upgrade-option" data-action="skill" data-skill="${skill.id}"><span class="option-index">MODULE / 0${i + 1}</span><i style="color:${skill.color}">${icon(skill.icon, 34)}</i><span class="skill-tag" style="color:${skill.color}">${this.i18n.text(skill.tag)}</span><h3>${this.i18n.text(skill.name)}</h3><p>${this.i18n.text(skill.description)}</p><span class="choose-label">${t('equipModule')} ${icon('arrow', 17)}</span></button>`).join('')}</div><small>${t('upgradePaused')}</small></div>`;
