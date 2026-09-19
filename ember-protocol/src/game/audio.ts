@@ -48,27 +48,30 @@ export class AudioEngine {
   private stepCounter = 0;
   private nextStepTime = 0;
   private combat = false;
-  /** Tempo 100 BPM; one step is a sixteenth note. */
-  private static readonly STEP = 60 / 100 / 4;
-  /** The theme phrase across the 64-step loop: D minor, one long breath per bar. */
+  /** Tempo 112 BPM; one step is a sixteenth note. */
+  private static readonly STEP = 60 / 112 / 4;
+  /**
+   * Battle riff in the style of top-down shooter grooves (Hotline Miami,
+   * Enter the Gungeon): a short two-bar motif answered by a variation, with
+   * long rests so the bass and drums carry the drive. Stays in D minor.
+   */
   private static readonly MELODY: { step: number; freq: number; len: number }[] = [
-    { step: 0, freq: 293.66, len: 5 },
-    { step: 6, freq: 349.23, len: 4 },
-    { step: 10, freq: 440, len: 6 },
-    { step: 16, freq: 392, len: 6 },
-    { step: 24, freq: 349.23, len: 4 },
-    { step: 28, freq: 329.63, len: 4 },
-    { step: 32, freq: 466.16, len: 6 },
-    { step: 38, freq: 440, len: 4 },
-    { step: 42, freq: 392, len: 6 },
-    { step: 48, freq: 440, len: 12 },
-    { step: 62, freq: 277.18, len: 2 },
+    { step: 0, freq: 293.66, len: 2 },
+    { step: 4, freq: 349.23, len: 2 },
+    { step: 8, freq: 440, len: 3 },
+    { step: 14, freq: 392, len: 2 },
+    { step: 20, freq: 349.23, len: 6 },
+    { step: 32, freq: 293.66, len: 2 },
+    { step: 36, freq: 349.23, len: 2 },
+    { step: 40, freq: 466.16, len: 3 },
+    { step: 46, freq: 440, len: 2 },
+    { step: 52, freq: 392, len: 6 },
   ];
-  private static readonly BAR_ROOTS = [73.42, 58.27, 43.65, 55];
+  private static readonly BAR_ROOTS = [73.42, 73.42, 58.27, 55];
   private static readonly BAR_PADS = [
     [146.83, 174.61, 220],
+    [146.83, 174.61, 220],
     [116.54, 146.83, 174.61],
-    [87.31, 110, 130.81],
     [110, 138.59, 164.81],
   ];
   /** Landing-page piece: eight bars, two per chord, bells over a slow drone. */
@@ -292,16 +295,14 @@ export class AudioEngine {
       if (note) this.melody(note.freq, t, note.len * stepDur);
       if (inBar === 0) {
         this.pad(AudioEngine.BAR_PADS[bar], t, barDur);
-        this.crash(t);
-        if (bar === 3) this.riser(t, barDur);
+        if (loopIndex % 4 === 0) this.crash(t);
+        else if (bar === 3 && loopIndex % 4 === 3) this.riser(t, barDur);
       }
-      if (inBar % 2 === 0) {
-        const root = AudioEngine.BAR_ROOTS[bar];
-        this.bass(inBar === 6 || inBar === 14 ? root * 2 : root, t, stepDur * 1.7);
-      }
-      if (inBar === 0 || inBar === 6 || inBar === 10) this.kick(t);
-      if (inBar === 8) this.snare(t);
-      if (inBar % 2 === 1) this.hat(t, inBar % 4 === 3 ? 0.1 : 0.055);
+      // Steady root-note eighth groove; no octave jumps to keep it calm.
+      if (inBar % 2 === 0) this.bass(AudioEngine.BAR_ROOTS[bar], t, stepDur * 1.8);
+      if (inBar === 0 || inBar === 4 || inBar === 8 || inBar === 12) this.kick(t);
+      if (inBar === 4 || inBar === 12) this.snare(t);
+      if (inBar % 4 === 2) this.hat(t, 0.07);
     } else {
       // Landing page: its own slow ambient piece — two-bar chords over a deep
       // drone with a sparse bell motif, no drums.
@@ -490,19 +491,19 @@ export class AudioEngine {
       lfo = ctx.createOscillator(),
       lfoGain = ctx.createGain();
     filter.type = 'lowpass';
-    filter.frequency.value = 1500;
+    filter.frequency.value = 1200;
     gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.linearRampToValueAtTime(0.16, t + 0.045);
-    gain.gain.setTargetAtTime(0.11, t + 0.1, 0.4);
-    gain.gain.setTargetAtTime(0.0001, t + dur - 0.09, 0.06);
-    lfo.frequency.value = 5.4;
+    gain.gain.linearRampToValueAtTime(0.1, t + 0.03);
+    gain.gain.setTargetAtTime(0.07, t + 0.08, 0.3);
+    gain.gain.setTargetAtTime(0.0001, t + dur - 0.06, 0.04);
+    lfo.frequency.value = 4.8;
     lfoGain.gain.setValueAtTime(0, t);
-    lfoGain.gain.linearRampToValueAtTime(9, t + 0.3);
+    lfoGain.gain.linearRampToValueAtTime(4, t + 0.25);
     lfo.connect(lfoGain);
     filter.connect(gain);
     gain.connect(this.musicBus!);
     if (this.echo) gain.connect(this.echo);
-    for (const detune of [-6, 6]) {
+    for (const detune of [-3, 3]) {
       const osc = ctx.createOscillator();
       osc.type = 'sawtooth';
       osc.frequency.value = freq;
