@@ -64,6 +64,7 @@ button:hover {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  --briefing-width: min(300px, 34vw);
 }
 .shell:fullscreen .topbar,
 .shell:fullscreen footer,
@@ -79,16 +80,15 @@ button:hover {
   max-width: none;
   padding: 0;
 }
-/* The briefing panel floats over the picture instead of shrinking it, so the
-   game still fills the screen but the run information stays readable. */
+/* The briefing panel floats over the page, but the stage reserves its width so
+   the picture is never painted underneath it. */
 .shell:fullscreen .sidebar {
   position: absolute;
   top: 0;
   right: 0;
   bottom: 0;
   z-index: 5;
-  width: 300px;
-  max-width: 34vw;
+  width: var(--briefing-width);
   padding: 18px;
   gap: 14px;
   overflow-y: auto;
@@ -103,6 +103,7 @@ button:hover {
 }
 .shell:fullscreen .field-stage {
   height: 100%;
+  padding-right: var(--briefing-width);
 }
 .shell:fullscreen .arena-shell {
   border: none;
