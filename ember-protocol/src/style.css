@@ -151,6 +151,9 @@ button:hover {
   align-items: center;
   gap: 18px;
   margin-left: 50px;
+  min-width: 0;
+  overflow: hidden;
+  flex: 0 1 auto;
 }
 .route-node {
   display: flex;
@@ -193,6 +196,7 @@ button:hover {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-shrink: 0;
 }
 .sound-panel {
   position: absolute;
@@ -1346,6 +1350,28 @@ kbd {
   }
   .mission-panel h2 {
     font-size: 24px;
+  }
+}
+/* Four-room rail is wide: compact it before the tools get squeezed out. */
+@media (max-width: 1550px) {
+  .route {
+    gap: 6px;
+    margin-left: 14px;
+  }
+  .route > i {
+    width: 10px;
+  }
+  .route-node {
+    font-size: 11px;
+    gap: 4px;
+  }
+  .route-node div[data-level-name] {
+    font-size: 10px;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+  }
+  .build-tag {
+    display: none;
   }
 }
 @media (max-width: 1250px) {
