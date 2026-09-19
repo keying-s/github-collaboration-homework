@@ -202,6 +202,11 @@ export class Interface {
           .catch(() => this.showNotice(this.i18n.t('fullscreenUnavailable')));
     }
     if (action === 'skill') this.model.chooseSkill(button.dataset.skill as SkillId);
+    // Guide navigation (Next/Prev/chapter + tab switch) changes state but the
+    // 70ms refresh() loop does not repaint the guide, so repaint it explicitly
+    // here — otherwise the buttons appear unresponsive.
+    if (this.guideOpen && action === 'guideStep') this.renderGuide();
+    if (this.guideOpen && action === 'guideTab') this.renderGuide();
     this.refresh();
   };
 
