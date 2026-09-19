@@ -179,6 +179,43 @@ export const LEVELS: Level[] = [
     ],
   },
   {
+    name: { zh: '排热竖井', en: 'THE VENT SHAFT' },
+    code: 'THE VENT SHAFT',
+    subtitle: {
+      zh: '穿越排气区，别让重甲冲锋把你逼进死角',
+      en: 'Cross the exhaust gauntlet and never let a charge corner you',
+    },
+    accent: 0xd9a273,
+    floor: 0x3a2e26,
+    obstacles: [
+      { x: 232, y: 205, w: 128, h: 62 },
+      { x: 918, y: 205, w: 128, h: 62 },
+      { x: 232, y: 545, w: 128, h: 62 },
+      { x: 918, y: 545, w: 128, h: 62 },
+      { x: 560, y: 190, w: 160, h: 56 },
+      { x: 560, y: 590, w: 160, h: 56 },
+    ],
+    barrels: [
+      { x: 398, y: 296 },
+      { x: 884, y: 300 },
+      { x: 745, y: 560 },
+    ],
+    waves: [
+      ['crawler', 'crawler', 'spitter', 'brute', 'crawler', 'spitter', 'crawler', 'crawler'],
+      [
+        'brute',
+        'spitter',
+        'crawler',
+        'spitter',
+        'crawler',
+        'brute',
+        'spitter',
+        'crawler',
+        'crawler',
+      ],
+    ],
+  },
+  {
     name: { zh: '反应堆之心', en: 'HEART OF THE REACTOR' },
     code: 'HEART OF THE REACTOR',
     subtitle: {

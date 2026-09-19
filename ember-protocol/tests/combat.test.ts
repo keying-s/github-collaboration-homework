@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Simulation } from '../src/game/simulation.ts';
-import { WEAPONS } from '../src/game/config.ts';
+import { LEVELS, WEAPONS } from '../src/game/config.ts';
 import {
   circleRect,
   distance,
@@ -244,10 +244,68 @@ test('all six waves, boss, modules and exits form a complete three-room campaign
     'won',
     `stuck at room ${m.levelIndex + 1}, wave ${m.waveIndex}, remaining ${m.remaining}, enemies: ${JSON.stringify(m.enemies.map((e) => ({ kind: e.kind, x: e.x, y: e.y, hp: e.hp })))}`,
   );
-  assert.equal(roomExits, 3);
+  assert.equal(roomExits, 4);
   assert.equal(reachedBoss, true);
-  assert.equal(m.kills, 43);
+  assert.equal(m.kills, 60);
   assert.equal(m.skills.length, 4);
+});
+
+test('every room keeps the spawn, weapon drop and portal clear of cover and reachable', () => {
+  // Adding or editing a room must never bury a spawn point behind cover.
+  const spawn: Vec = { x: 640, y: 445 };
+  const weaponDrop: Vec = { x: 494, y: 425 };
+  const portal: Vec = { x: 1160, y: 400 };
+  const bossSpawn: Vec = { x: 640, y: 190 };
+  const enemySpawns: Vec[] = [
+    { x: 135, y: 160 },
+    { x: 640, y: 115 },
+    { x: 1145, y: 160 },
+    { x: 1145, y: 650 },
+    { x: 640, y: 690 },
+    { x: 135, y: 650 },
+  ];
+  const clearOf = (level: (typeof LEVELS)[number], p: Vec, r: number) =>
+    !level.obstacles.some((b) => circleRect(p, r, b));
+  const reachable = (level: (typeof LEVELS)[number], from: Vec, to: Vec) => {
+    const step = 20;
+    const free = (p: Vec) =>
+      p.x >= 80 &&
+      p.x <= 1200 &&
+      p.y >= 80 &&
+      p.y <= 720 &&
+      !level.obstacles.some((b) => circleRect(p, 17, b));
+    const seen = new Set(['640,445']);
+    const queue: Vec[] = [from];
+    while (queue.length) {
+      const p = queue.shift()!;
+      if (distance(p, to) <= step * 2) return true;
+      for (const d of [
+        { x: step, y: 0 },
+        { x: -step, y: 0 },
+        { x: 0, y: step },
+        { x: 0, y: -step },
+      ]) {
+        const next = { x: p.x + d.x, y: p.y + d.y };
+        const key = `${next.x},${next.y}`;
+        if (seen.has(key) || !free(next)) continue;
+        seen.add(key);
+        queue.push(next);
+      }
+    }
+    return false;
+  };
+  LEVELS.forEach((level, index) => {
+    const room = `room ${index + 1}`;
+    assert.ok(clearOf(level, spawn, 17), `${room} player spawn is inside cover`);
+    assert.ok(clearOf(level, weaponDrop, 17), `${room} weapon drop is inside cover`);
+    assert.ok(clearOf(level, portal, 17), `${room} portal is inside cover`);
+    for (const point of enemySpawns)
+      assert.ok(clearOf(level, point, 31), `${room} enemy spawn is inside cover`);
+    assert.ok(reachable(level, spawn, weaponDrop), `${room} weapon drop is unreachable`);
+    assert.ok(reachable(level, spawn, portal), `${room} portal is unreachable`);
+    if (index === LEVELS.length - 1)
+      assert.ok(clearOf(level, bossSpawn, 58), 'boss spawn is inside cover');
+  });
 });
 
 test('contact enemies remain outside the muzzle and can be shot at point-blank range', () => {
