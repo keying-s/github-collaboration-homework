@@ -73,7 +73,7 @@ git worktree add ../homework-splitting-enemy -b feat/keying-s/splitting-enemy or
 - 给行为变化增加适当回归测试；UI 变化检查实际画面和交互。
 - 在游戏目录运行 `npm.cmd test`、`npm.cmd run build`、`npm.cmd run format:check`。
 - 依赖改变时用 npm 更新锁文件，确认 `npm.cmd ci` 可复现安装。
-- 更新受影响的文档和说明。保存关键提示词的**摘要**、人类追加约束及最终验收，不必上传整段聊天，更不能附带密钥或私人内容。
+- 更新受影响的文档和说明；游戏 feature 或修复类 PR 同时在 `docs/FEATURES.md` 追加一行（功能、负责人、PR · Issue 链接、状态）。保存关键提示词的**摘要**、人类追加约束及最终验收，不必上传整段聊天，更不能附带密钥或私人内容。
 - 新增或修改玩家可见内容时，在同一个 PR 中提供中文和英文。静态 UI 文案更新 `src/i18n.ts`，配置内容使用 `LocalizedText`，并检查两种语言的布局和语义。
 
 检查 diff 后明确指定本次要提交的文件，不盲目 `git add .` 把未知文件带入仓库。提交信息建议：
