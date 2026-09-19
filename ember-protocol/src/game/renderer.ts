@@ -24,6 +24,27 @@ interface Arc extends Vec {
   target: Vec;
   life: number;
 }
+/** A corpse left behind by a kill: different causes die in different ways. */
+interface Death extends Vec {
+  kind: Enemy['kind'];
+  cause: NonNullable<GameEvent['cause']>;
+  color: number;
+  radius: number;
+  life: number;
+  max: number;
+  spin: number;
+  vx: number;
+  vy: number;
+  shards: number;
+  spread: number;
+}
+interface Flash extends Vec {
+  angle: number;
+  life: number;
+  max: number;
+  color: number;
+}
+const DEATH_TIME = { crawler: 0.3, spitter: 0.32, brute: 0.45, boss: 0.62 };
 
 export class ArenaRenderer {
   private floor: Graphics;
@@ -33,6 +54,11 @@ export class ArenaRenderer {
   private particles: Particle[] = [];
   private rings: Ring[] = [];
   private arcs: Arc[] = [];
+  private deaths: Death[] = [];
+  private flashes: Flash[] = [];
+  private recoil = { x: 0, y: 0, life: 0 };
+  private edgeFlash = 0;
+  private shotShakeAt = -1;
   private drawnLevel = -1;
   private random = seededRandom(42);
   constructor(
@@ -61,6 +87,10 @@ export class ArenaRenderer {
     this.particles = [];
     this.rings = [];
     this.arcs = [];
+    this.deaths = [];
+    this.flashes = [];
+    this.recoil = { x: 0, y: 0, life: 0 };
+    this.edgeFlash = 0;
     this.drawnLevel = -1;
   }
   private drawFloor() {
@@ -166,6 +196,7 @@ export class ArenaRenderer {
     const g = this.ink,
       m = this.model;
     g.clear();
+    if (this.recoil.life > 0) this.recoil.life = Math.max(0, this.recoil.life - dt);
     this.drawPortal(g, time);
     for (const b of m.barrels) {
       g.fillStyle(0x091619, 0.4).fillEllipse(b.x + 5, b.y + 8, 40, 25);
@@ -266,7 +297,13 @@ export class ArenaRenderer {
       if (p.invincible > 0) {
         g.lineStyle(2, 0xf6cba4, 0.3 + Math.sin(time * 20) * 0.2).strokeCircle(p.x, p.y, 26);
       }
+      const kick = this.recoil.life > 0;
+      if (kick) {
+        const k = this.recoil.life / 0.09;
+        g.save().translateCanvas(this.recoil.x * k, this.recoil.y * k);
+      }
       this.drawAgent(g, p, p.angle, p.weapon, time, false, p.moving);
+      if (kick) g.restore();
       if (p.reloadRemaining > 0) {
         g.lineStyle(3, 0xf2c397, 0.9);
         g.beginPath();
@@ -455,8 +492,71 @@ export class ArenaRenderer {
       );
     }
   }
+  /** Camera shake that can be rate-limited, so burst fire stays readable. */
+  private shake(duration: number, intensity: number, minInterval: number) {
+    const now = this.scene.time.now;
+    if (minInterval > 0) {
+      if (now - this.shotShakeAt < minInterval * 1000) return;
+      this.shotShakeAt = now;
+    }
+    this.scene.cameras.main.shake(duration, intensity);
+  }
+  /** 0-3: how hot the current kill streak is. Drives escalating feedback. */
+  private comboTier() {
+    const c = this.model.combo;
+    return c >= 12 ? 3 : c >= 8 ? 2 : c >= 4 ? 1 : 0;
+  }
+  private warm(base: number, tier: number) {
+    if (tier <= 0) return base;
+    const mix = tier / 3;
+    const lerp = (a: number, b: number) => Math.round(a + (b - a) * mix);
+    return (
+      (lerp((base >> 16) & 255, 0xf2) << 16) |
+      (lerp((base >> 8) & 255, 0xb2) << 8) |
+      lerp(base & 255, 0x6b)
+    );
+  }
+  private killFeedback(event: GameEvent) {
+    const kind = event.kind ?? 'crawler';
+    const cause = event.cause ?? 'bullet';
+    const tier = this.comboTier();
+    const color = this.warm(event.color ?? 0x94c598, tier);
+    const lift = cause === 'explosion' ? -170 : -20;
+    const outward = cause === 'explosion' ? 150 : cause === 'chain' ? 40 : 70;
+    const angle = this.random() * Math.PI * 2;
+    this.deaths.push({
+      x: event.x,
+      y: event.y,
+      kind,
+      cause,
+      color: cause === 'chain' ? 0x9fd2dd : color,
+      radius: (event.value ?? 20) * 0.9,
+      life: DEATH_TIME[kind],
+      max: DEATH_TIME[kind],
+      spin: (this.random() < 0.5 ? -1 : 1) * (1.4 + this.random() * 1.6),
+      vx: Math.cos(angle) * outward * 0.35,
+      vy: lift + Math.sin(angle) * outward * 0.25,
+      shards: cause === 'explosion' ? 7 : cause === 'chain' ? 5 : 4,
+      spread: cause === 'explosion' ? 62 : cause === 'chain' ? 34 : 26,
+    });
+    const heavy = kind === 'brute' || kind === 'boss';
+    this.shake(heavy ? 190 : 110, (heavy ? 0.009 : 0.0055) + tier * 0.0016, 0);
+    if (tier === 3) this.edgeFlash = 0.34;
+  }
   handle(event: GameEvent) {
     const color = event.color ?? 0xc6d5b0;
+    if (event.type === 'shot' && event.loud && typeof event.value === 'number') {
+      this.flashes.push({
+        x: event.x,
+        y: event.y,
+        angle: event.value,
+        life: 0.07,
+        max: 0.07,
+        color,
+      });
+      this.recoil = { x: -Math.cos(event.value) * 5, y: -Math.sin(event.value) * 5, life: 0.09 };
+      this.shake(55, 0.0016, 0.12);
+    }
     if (['hit', 'kill', 'shot', 'dash', 'explosion', 'pickup'].includes(event.type)) {
       const count =
         event.type === 'explosion'
@@ -490,8 +590,14 @@ export class ArenaRenderer {
         life,
         max: life,
         radius:
-          event.type === 'explosion' ? (event.value ?? 120) : event.type === 'clear' ? 220 : 50,
-        color,
+          event.type === 'explosion'
+            ? (event.value ?? 120)
+            : event.type === 'clear'
+              ? 220
+              : event.type === 'kill'
+                ? 50 + this.comboTier() * 20
+                : 50,
+        color: event.type === 'kill' ? this.warm(color, this.comboTier()) : color,
       });
     }
     if (event.type === 'chain' && event.target)
@@ -525,8 +631,10 @@ export class ArenaRenderer {
         onComplete: () => t.destroy(),
       });
     }
-    if (event.type === 'hurt') this.scene.cameras.main.shake(110, 0.004);
-    if (event.type === 'explosion') this.scene.cameras.main.shake(130, 0.003);
+    if (event.type === 'kill') this.killFeedback(event);
+    if (event.type === 'hit') this.shake(70, 0.0022, 0);
+    if (event.type === 'hurt') this.shake(130, 0.0062, 0);
+    if (event.type === 'explosion') this.shake(130, 0.0035, 0);
   }
   private drawEffects(dt: number) {
     const g = this.effects;
@@ -568,6 +676,63 @@ export class ArenaRenderer {
       g.strokePath();
     }
     this.arcs = this.arcs.filter((a) => a.life > 0);
+    this.drawDeaths(dt);
+    this.drawFlashes(dt);
+    if (this.edgeFlash > 0) {
+      this.edgeFlash = Math.max(0, this.edgeFlash - dt);
+      g.lineStyle(14, 0xf6c9a0, (this.edgeFlash / 0.34) * 0.22).strokeRect(14, 14, 1252, 772);
+    }
+  }
+  /** Corpses: shatter for chain kills, blown apart for blasts, tumble for bullets. */
+  private drawDeaths(dt: number) {
+    const g = this.effects;
+    for (const d of this.deaths) {
+      d.life -= dt;
+      const t = Math.min(1, 1 - Math.max(0, d.life) / d.max);
+      const x = d.x + d.vx * t,
+        y = d.y + d.vy * t + (d.cause === 'explosion' ? 0 : t * t * 26);
+      const alpha = 1 - t * t;
+      const scale = d.cause === 'explosion' ? 1 + t * 0.35 : 1 - t * 0.45;
+      g.fillStyle(0x081517, alpha * 0.25).fillEllipse(
+        d.x + 4,
+        d.y + d.radius * 0.5,
+        d.radius * 2,
+        d.radius,
+      );
+      g.save()
+        .translateCanvas(x, y)
+        .rotateCanvas(d.spin * t * (d.cause === 'chain' ? 0.5 : 1.15))
+        .scaleCanvas(scale, scale);
+      g.fillStyle(d.color, alpha * 0.92).fillCircle(0, 0, d.radius);
+      g.fillStyle(0x16262a, alpha * 0.55).fillCircle(0, 0, d.radius * 0.52);
+      g.lineStyle(2, 0x0d1a1c, alpha * 0.5).strokeCircle(0, 0, d.radius * 0.8);
+      g.restore();
+      const shardColor = d.cause === 'chain' ? 0xc4f2f2 : d.color;
+      for (let i = 0; i < d.shards; i++) {
+        const a = d.spin + (i * Math.PI * 2) / d.shards,
+          reach = t * d.spread,
+          size = 3 + (i % 2) * 2;
+        g.fillStyle(shardColor, alpha * 0.85).fillRect(
+          x + Math.cos(a) * reach - size / 2,
+          y + Math.sin(a) * reach - size / 2,
+          size,
+          size,
+        );
+      }
+    }
+    this.deaths = this.deaths.filter((d) => d.life > 0);
+  }
+  private drawFlashes(dt: number) {
+    const g = this.effects;
+    for (const f of this.flashes) {
+      f.life -= dt;
+      const a = Math.max(0, f.life / f.max);
+      g.save().translateCanvas(f.x, f.y).rotateCanvas(f.angle);
+      g.fillStyle(0xfff1d0, a * 0.95).fillTriangle(0, 0, 30, -10, 30, 10);
+      g.fillStyle(f.color, a * 0.5).fillCircle(8, 0, 13);
+      g.restore();
+    }
+    this.flashes = this.flashes.filter((f) => f.life > 0);
   }
   drawAim(aim: Vec) {
     if (this.model.phase === 'menu') return;
