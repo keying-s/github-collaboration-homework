@@ -5,24 +5,28 @@ const STORAGE_KEY = 'ember-protocol-audio';
 interface AudioPrefs {
   music: number;
   sfx: number;
-  muted: boolean;
+  musicMuted: boolean;
+  sfxMuted: boolean;
 }
 
 function loadPrefs(): AudioPrefs {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      const parsed = JSON.parse(raw) as Partial<AudioPrefs>;
+      const parsed = JSON.parse(raw) as Partial<AudioPrefs> & { muted?: boolean };
+      // Migrate the earlier single "muted" switch to per-channel mutes.
+      const legacyMuted = parsed.muted === true;
       return {
         music: clampVolume(parsed.music, 0.6),
         sfx: clampVolume(parsed.sfx, 1),
-        muted: parsed.muted === true,
+        musicMuted: parsed.musicMuted ?? legacyMuted,
+        sfxMuted: parsed.sfxMuted ?? legacyMuted,
       };
     }
   } catch {
     /* Storage can be unavailable in privacy modes; defaults still apply. */
   }
-  return { music: 0.6, sfx: 1, muted: false };
+  return { music: 0.6, sfx: 1, musicMuted: false, sfxMuted: false };
 }
 
 function clampVolume(value: unknown, fallback: number): number {
@@ -31,7 +35,8 @@ function clampVolume(value: unknown, fallback: number): number {
 
 /** Small synthesized sound bank: no external assets or network dependency. */
 export class AudioEngine {
-  muted = false;
+  musicMuted = false;
+  sfxMuted = false;
   musicVolume: number;
   sfxVolume: number;
   private context?: AudioContext;
@@ -60,7 +65,12 @@ export class AudioEngine {
     const prefs = loadPrefs();
     this.musicVolume = prefs.music;
     this.sfxVolume = prefs.sfx;
-    this.muted = prefs.muted;
+    this.musicMuted = prefs.musicMuted;
+    this.sfxMuted = prefs.sfxMuted;
+  }
+  /** Both channels silenced — drives the top-bar icon and M key semantics. */
+  get muted() {
+    return this.musicMuted && this.sfxMuted;
   }
   unlock() {
     try {
@@ -95,17 +105,36 @@ export class AudioEngine {
         this.noise = noise;
       }
       void this.context.resume();
-      if (!this.muted) this.startMusic();
+      if (!this.musicMuted) this.startMusic();
     } catch {
       /* Audio is optional; gameplay remains available. */
     }
   }
+  /** Mute-all: silence both channels; a second call restores their remembered levels. */
   toggle() {
-    this.muted = !this.muted;
+    if (this.muted) {
+      this.musicMuted = false;
+      this.sfxMuted = false;
+    } else {
+      this.musicMuted = true;
+      this.sfxMuted = true;
+    }
     this.persist();
     this.unlock();
-    if (this.muted) this.stopMusic();
+    this.applyMusicGain();
+    if (this.musicMuted) this.stopMusic();
     return this.muted;
+  }
+  setMusicMuted(muted: boolean) {
+    this.musicMuted = muted;
+    this.applyMusicGain();
+    if (this.musicMuted) this.stopMusic();
+    else if (this.context) this.startMusic();
+    this.persist();
+  }
+  setSfxMuted(muted: boolean) {
+    this.sfxMuted = muted;
+    this.persist();
   }
   setMusicVolume(volume: number) {
     this.musicVolume = clampVolume(volume, this.musicVolume);
@@ -119,7 +148,7 @@ export class AudioEngine {
   /** One gunshot through the SFX chain so the slider can be set by ear. */
   testSfx() {
     this.unlock();
-    if (this.sfxVolume <= 0) return;
+    if (this.sfxMuted || this.sfxVolume <= 0) return;
     const ctx = this.context;
     if (!ctx || !this.bus) return;
     const t = ctx.currentTime;
@@ -144,7 +173,7 @@ export class AudioEngine {
     this.combat = combat;
   }
   play(event: GameEvent) {
-    if (this.muted || this.sfxVolume <= 0 || !this.context || !this.bus) return;
+    if (this.sfxMuted || this.sfxVolume <= 0 || !this.context || !this.bus) return;
     const bank: Partial<Record<GameEvent['type'], [number, number, number, OscillatorType]>> = {
       shot: [event.loud ? 190 : 300, 70, 0.06, 'sawtooth'],
       kill: [210, 95, 0.09, 'triangle'],
@@ -218,7 +247,7 @@ export class AudioEngine {
   }
   private applyMusicGain() {
     if (this.musicBus && this.context) {
-      const target = this.muted ? 0 : 0.6 * this.musicVolume;
+      const target = this.musicMuted ? 0 : 0.6 * this.musicVolume;
       this.musicBus.gain.setTargetAtTime(target, this.context.currentTime, 0.05);
     }
   }
@@ -226,7 +255,12 @@ export class AudioEngine {
     try {
       localStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ music: this.musicVolume, sfx: this.sfxVolume, muted: this.muted }),
+        JSON.stringify({
+          music: this.musicVolume,
+          sfx: this.sfxVolume,
+          musicMuted: this.musicMuted,
+          sfxMuted: this.sfxMuted,
+        }),
       );
     } catch {
       /* Persistence is best-effort; volume still works for the session. */

@@ -231,6 +231,30 @@ button:hover {
   color: #efb58a;
   border-color: #efb58a66;
 }
+.sound-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  background: #0e201880;
+  border: 1px solid #52634a55;
+  border-radius: 6px;
+  color: #aebca2;
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
+}
+.sound-toggle:hover {
+  color: #efb58a;
+  border-color: #efb58a66;
+}
+.sound-toggle.muted {
+  color: #e8a1a1;
+  border-color: #8f4a4a66;
+}
 .mute-switch {
   display: flex;
   align-items: center;
