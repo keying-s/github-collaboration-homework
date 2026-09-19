@@ -66,7 +66,6 @@ button:hover {
   overflow: hidden;
 }
 .shell:fullscreen .topbar,
-.shell:fullscreen .sidebar,
 .shell:fullscreen footer,
 .shell:fullscreen .field-top,
 .shell:fullscreen .field-bottom {
@@ -74,10 +73,30 @@ button:hover {
 }
 .shell:fullscreen .workspace {
   display: block;
+  position: relative;
   flex: 1;
   min-height: 0;
   max-width: none;
   padding: 0;
+}
+/* The briefing panel floats over the picture instead of shrinking it, so the
+   game still fills the screen but the run information stays readable. */
+.shell:fullscreen .sidebar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 5;
+  width: 300px;
+  max-width: 34vw;
+  padding: 18px;
+  gap: 14px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #354b38 transparent;
+  background: #0d1a13e6;
+  border-left: 1px solid #2a3b34;
+  backdrop-filter: blur(3px);
 }
 .shell:fullscreen .field-wrap {
   height: 100%;
