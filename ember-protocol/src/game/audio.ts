@@ -42,12 +42,14 @@ export class AudioEngine {
   private context?: AudioContext;
   private bus?: GainNode;
   private musicBus?: GainNode;
+  private musicFilter?: BiquadFilterNode;
   private echo?: DelayNode;
   private noise?: AudioBuffer;
   private musicTimer?: number;
   private stepCounter = 0;
   private nextStepTime = 0;
   private combat = false;
+  private bossPhase2 = false;
   /** Tempo 112 BPM; one step is a sixteenth note. */
   private static readonly STEP = 60 / 112 / 4;
   /**
@@ -112,7 +114,11 @@ export class AudioEngine {
       if (!this.musicBus) {
         this.musicBus = this.context.createGain();
         this.applyMusicGain();
-        this.musicBus.connect(this.context.destination);
+        this.musicFilter = this.context.createBiquadFilter();
+        this.musicFilter.type = 'lowpass';
+        this.musicFilter.frequency.value = 18000;
+        this.musicBus.connect(this.musicFilter);
+        this.musicFilter.connect(this.context.destination);
         const echo = this.context.createDelay(1);
         echo.delayTime.value = AudioEngine.STEP * 2;
         const feedback = this.context.createGain();
@@ -221,8 +227,21 @@ export class AudioEngine {
   setCombat(combat: boolean) {
     if (combat === this.combat) return;
     this.combat = combat;
+    if (!combat) this.setBossPhase(false);
     this.stopMusic();
     if (!this.musicMuted && this.context) this.startMusic();
+  }
+  /** Boss phase 2: the music darkens (filter dive) and the drum layer doubles. */
+  setBossPhase(phase2: boolean) {
+    if (phase2 === this.bossPhase2) return;
+    this.bossPhase2 = phase2 && this.combat;
+    if (this.musicFilter && this.context) {
+      this.musicFilter.frequency.setTargetAtTime(
+        this.bossPhase2 ? 800 : 18000,
+        this.context.currentTime,
+        0.12,
+      );
+    }
   }
   play(event: GameEvent) {
     if (this.sfxMuted || this.sfxVolume <= 0 || !this.context || !this.bus) return;
@@ -300,9 +319,16 @@ export class AudioEngine {
       }
       // Steady root-note eighth groove; no octave jumps to keep it calm.
       if (inBar % 2 === 0) this.bass(AudioEngine.BAR_ROOTS[bar], t, stepDur * 1.8);
-      if (inBar === 0 || inBar === 4 || inBar === 8 || inBar === 12) this.kick(t);
+      if (
+        inBar === 0 ||
+        inBar === 4 ||
+        inBar === 8 ||
+        inBar === 12 ||
+        (this.bossPhase2 && inBar === 14)
+      )
+        this.kick(t);
       if (inBar === 4 || inBar === 12) this.snare(t);
-      if (inBar % 4 === 2) this.hat(t, 0.07);
+      if (inBar % 4 === 2 || this.bossPhase2) this.hat(t, inBar % 4 === 3 ? 0.09 : 0.05);
     } else {
       // Landing page: its own slow ambient piece — two-bar chords over a deep
       // drone with a sparse bell motif, no drums.
