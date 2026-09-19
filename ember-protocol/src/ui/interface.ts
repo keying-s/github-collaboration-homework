@@ -329,6 +329,7 @@ export class Interface {
     const key = `${this.soundPanelOpen}-${this.audio.musicMuted}-${this.audio.sfxMuted}-${this.i18n.locale}`;
     if (key === this.soundKey) return;
     this.soundKey = key;
+    this.updateSound();
     if (!this.soundPanelOpen) {
       panel.innerHTML = '';
       return;
