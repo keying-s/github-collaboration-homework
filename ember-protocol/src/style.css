@@ -1355,18 +1355,23 @@ kbd {
 /* Four-room rail is wide: compact it before the tools get squeezed out. */
 @media (max-width: 1550px) {
   .route {
-    gap: 10px;
-    margin-left: 20px;
+    gap: 8px;
+    margin-left: 16px;
   }
   .route > i {
-    width: 14px;
+    width: 12px;
   }
   .route-node {
     font-size: 11px;
-    gap: 6px;
+    gap: 5px;
   }
-  .route div[data-level-name] {
-    display: none;
+  .route-node div[data-level-name] {
+    font-size: 10px;
+    letter-spacing: 0.3px;
+    max-width: 96px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .build-tag {
     display: none;
