@@ -158,7 +158,6 @@ export class Interface {
     }
     if (action === 'toggleMusic') this.audio.setMusicMuted(!this.audio.musicMuted);
     if (action === 'toggleSfx') this.audio.setSfxMuted(!this.audio.sfxMuted);
-    if (action === 'testSfx') this.audio.testSfx();
     if (action === 'language') this.i18n.toggle();
     if (action === 'fullscreen') {
       if (document.fullscreenElement) void document.exitFullscreen();
@@ -337,9 +336,10 @@ export class Interface {
     const t = (key: TranslationKey) => this.i18n.t(key);
     const label = (muted: boolean, volume: number) =>
       muted ? '0%' : `${Math.round(volume * 100)}%`;
+    const sliderValue = (muted: boolean, volume: number) => (muted ? 0 : Math.round(volume * 100));
     const toggle = (action: string, muted: boolean) =>
       `<button class="sound-toggle${muted ? ' muted' : ''}" data-action="${action}" title="${muted ? t('unmuteChannel') : t('muteChannel')}">${icon(muted ? 'mute' : 'volume', 13)}</button>`;
-    panel.innerHTML = `<div class="sound-panel-card"><div class="sound-panel-title">${t('soundPanelTitle')}</div><div class="sound-row"><span data-i18n="musicVolume">${t('musicVolume')}</span><b id="music-value">${label(this.audio.musicMuted, this.audio.musicVolume)}</b></div><div class="sound-slider-row">${toggle('toggleMusic', this.audio.musicMuted)}<input id="slider-music" type="range" min="0" max="100" step="1" value="${Math.round(this.audio.musicVolume * 100)}" data-setting="music" aria-label="${t('musicVolume')}"></div><div class="sound-row"><span data-i18n="sfxVolume">${t('sfxVolume')}</span><b id="sfx-value">${label(this.audio.sfxMuted, this.audio.sfxVolume)}</b></div><div class="sound-slider-row">${toggle('toggleSfx', this.audio.sfxMuted)}<input id="slider-sfx" type="range" min="0" max="100" step="1" value="${Math.round(this.audio.sfxVolume * 100)}" data-setting="sfx" aria-label="${t('sfxVolume')}"><button class="test-button" data-action="testSfx" title="${t('testSfx')}">${icon('volume', 13)}</button></div><button class="mute-switch${this.audio.muted ? ' muted' : ''}" data-action="muteAll">${this.audio.muted ? icon('mute', 13) : icon('volume', 13)} <span data-i18n="muteAll">${t('muteAll')}</span></button></div>`;
+    panel.innerHTML = `<div class="sound-panel-card"><div class="sound-panel-title">${t('soundPanelTitle')}</div><div class="sound-row"><span data-i18n="musicVolume">${t('musicVolume')}</span><b id="music-value">${label(this.audio.musicMuted, this.audio.musicVolume)}</b></div><div class="sound-slider-row">${toggle('toggleMusic', this.audio.musicMuted)}<input id="slider-music" type="range" min="0" max="100" step="1" value="${sliderValue(this.audio.musicMuted, this.audio.musicVolume)}" data-setting="music" aria-label="${t('musicVolume')}"></div><div class="sound-row"><span data-i18n="sfxVolume">${t('sfxVolume')}</span><b id="sfx-value">${label(this.audio.sfxMuted, this.audio.sfxVolume)}</b></div><div class="sound-slider-row">${toggle('toggleSfx', this.audio.sfxMuted)}<input id="slider-sfx" type="range" min="0" max="100" step="1" value="${sliderValue(this.audio.sfxMuted, this.audio.sfxVolume)}" data-setting="sfx" aria-label="${t('sfxVolume')}"></div><button class="mute-switch${this.audio.muted ? ' muted' : ''}" data-action="muteAll">${this.audio.muted ? icon('mute', 13) : icon('volume', 13)} <span data-i18n="muteAll">${t('muteAll')}</span></button></div>`;
   }
 
   private renderOverlay() {

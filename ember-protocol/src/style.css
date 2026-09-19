@@ -211,26 +211,6 @@ button:hover {
   background: #efb58a;
   box-shadow: 0 1px 4px #0008;
 }
-.test-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  flex-shrink: 0;
-  background: #0e201880;
-  border: 1px solid #52634a55;
-  border-radius: 6px;
-  color: #aebca2;
-  cursor: pointer;
-  transition:
-    color 0.15s,
-    border-color 0.15s;
-}
-.test-button:hover {
-  color: #efb58a;
-  border-color: #efb58a66;
-}
 .sound-toggle {
   display: flex;
   align-items: center;

@@ -145,29 +145,6 @@ export class AudioEngine {
     this.sfxVolume = clampVolume(volume, this.sfxVolume);
     this.persist();
   }
-  /** One gunshot through the SFX chain so the slider can be set by ear. */
-  testSfx() {
-    this.unlock();
-    if (this.sfxMuted || this.sfxVolume <= 0) return;
-    const ctx = this.context;
-    if (!ctx || !this.bus) return;
-    const t = ctx.currentTime;
-    const osc = ctx.createOscillator(),
-      gain = ctx.createGain();
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(300, t);
-    osc.frequency.exponentialRampToValueAtTime(70, t + 0.06);
-    gain.gain.setValueAtTime(0.35 * this.sfxVolume, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
-    osc.connect(gain);
-    gain.connect(this.bus);
-    osc.start(t);
-    osc.stop(t + 0.06);
-    osc.onended = () => {
-      osc.disconnect();
-      gain.disconnect();
-    };
-  }
   /** Combat switches the loop to the denser drum-driven arrangement. */
   setCombat(combat: boolean) {
     this.combat = combat;
