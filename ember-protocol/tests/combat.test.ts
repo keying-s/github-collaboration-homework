@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Simulation } from '../src/game/simulation.ts';
-import { LEVELS, WEAPONS } from '../src/game/config.ts';
+import { LEVELS, WEAPONS, WORLD } from '../src/game/config.ts';
 import {
   circleRect,
   distance,
@@ -337,4 +337,52 @@ test('random module drafts can offer all six skills, stay stable and never repea
     assert.ok(!m.options.some((s) => s.id === first[0]));
   }
   assert.equal(seen.size, 6);
+});
+
+test('knockback pushes hit enemies back without wedging them into cover', () => {
+  const m = game();
+  m.waveDelay = 100;
+  const e = enemy(760, 445, 'crawler');
+  e.hp = 100000;
+  e.maxHp = 100000;
+  e.cooldown = 1000000;
+  m.enemies = [e];
+  const startX = e.x;
+  let pushedBack = false;
+  for (let frame = 0; frame < 180; frame++) {
+    m.tick(1 / 60, { ...idle, aim: { x: e.x, y: e.y }, firing: true });
+    assert.ok(
+      !m.level.obstacles.some((b) => circleRect(e, e.radius - 0.5, b)),
+      `knockback pushed an enemy into cover at ${e.x},${e.y}`,
+    );
+    assert.ok(
+      e.x >= WORLD.inset - 1 &&
+        e.x <= WORLD.width - WORLD.inset + 1 &&
+        e.y >= WORLD.inset - 1 &&
+        e.y <= WORLD.height - WORLD.inset + 1,
+      `knockback pushed an enemy out of the arena at ${e.x},${e.y}`,
+    );
+    if (e.x > startX + 8) pushedBack = true;
+  }
+  assert.ok(pushedBack, 'a hit should visibly push the enemy along the bullet');
+});
+
+test('kill hitstop is short, bounded and never accumulates across kills', () => {
+  const m = game();
+  m.waveDelay = 100;
+  for (const kind of ['crawler', 'spitter', 'brute'] as const) {
+    const e = enemy(700, 445, kind);
+    e.hp = 1;
+    e.maxHp = 1;
+    e.cooldown = 1000000;
+    m.enemies = [e];
+    m.freeze = 0;
+    for (let frame = 0; frame < 40 && m.freeze === 0; frame++)
+      m.tick(1 / 60, { ...idle, aim: { x: e.x, y: e.y }, firing: true });
+    assert.ok(m.freeze > 0, `${kind} kill should trigger a hitstop`);
+    assert.ok(m.freeze <= 0.09 + 1e-9, `${kind} hitstop too long: ${m.freeze}`);
+    // The world resumes once the freeze budget is spent.
+    for (let frame = 0; frame < 10; frame++) m.tick(1 / 60, idle);
+    assert.equal(m.freeze, 0);
+  }
 });

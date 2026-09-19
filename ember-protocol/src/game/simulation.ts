@@ -7,6 +7,7 @@ import type {
   EnemyKind,
   GameEvent,
   InputState,
+  KillCause,
   Phase,
   Pickup,
   Player,
@@ -50,6 +51,7 @@ export class Simulation {
   bestCombo = 0;
   comboTime = 0;
   damageTaken = 0;
+  freeze = 0;
   hint: StatusMessage = { key: 'stateReady' };
   waveDelay = 1.5;
   private queue: EnemyKind[] = [];
@@ -123,6 +125,7 @@ export class Simulation {
     this.bestCombo = 0;
     this.damageTaken = 0;
     this.hitCount = 0;
+    this.freeze = 0;
     this.levelIndex = 0;
     this.paused = false;
     this.phase = 'combat';
@@ -198,6 +201,11 @@ export class Simulation {
   tick(dt: number, input: InputState = EMPTY_INPUT) {
     if (this.paused || !['combat', 'exit'].includes(this.phase)) return;
     dt = clamp(dt, 0, 0.05);
+    // Hitstop: killing blows freeze the world for a few frames so the hit lands.
+    if (this.freeze > 0) {
+      this.freeze = Math.max(0, this.freeze - dt);
+      return;
+    }
     if (this.phase === 'combat') this.elapsed += dt;
     this.comboTime = Math.max(0, this.comboTime - dt);
     if (this.comboTime === 0) this.combo = 0;
@@ -308,6 +316,25 @@ export class Simulation {
     if (!this.level.obstacles.some((b) => circleRect({ x: nx, y: p.y }, r, b))) p.x = nx;
     const ny = clamp(p.y + d.y * amount, edge, WORLD.height - edge);
     if (!this.level.obstacles.some((b) => circleRect({ x: p.x, y: ny }, r, b))) p.y = ny;
+  }
+  /** Enemy steering. If cover blocks the way, slide along it instead of pressing. */
+  private enemyMove(e: Enemy, d: Vec, speed: number, dt: number) {
+    const before = { x: e.x, y: e.y };
+    this.move(e, d, speed * dt, e.radius);
+    if (distance(e, before) >= 0.3 || speed <= 0) {
+      e.stuck = 0;
+      return;
+    }
+    e.stuck = (e.stuck ?? 0) + dt;
+    if (e.stuck > 0.25) {
+      // Pressed against cover: slide along it. Try both tangents so we never
+      // pick the side that pushes deeper into the block.
+      for (const side of e.id % 2 === 0 ? [1, -1] : [-1, 1]) {
+        const from = { x: e.x, y: e.y };
+        this.move(e, { x: -d.y * side, y: d.x * side }, speed * dt, e.radius);
+        if (distance(e, from) >= 0.3) break;
+      }
+    }
   }
   private fire(p: Vec, angle: number, id: WeaponId, owner: 'player' | 'ally') {
     const w = WEAPONS[id],
@@ -439,6 +466,18 @@ export class Simulation {
       e.age += dt;
       e.flash = Math.max(0, e.flash - dt);
       e.slow = Math.max(0, e.slow - dt);
+      if (e.knock) {
+        const speed = Math.hypot(e.knock.x, e.knock.y);
+        if (speed > 1) {
+          this.move(e, normalize(e.knock), speed * dt, e.radius);
+          const decay = Math.exp(-dt * 11);
+          e.knock.x *= decay;
+          e.knock.y *= decay;
+        } else {
+          e.knock.x = 0;
+          e.knock.y = 0;
+        }
+      }
       if (e.age < 0.7) continue;
       const d = distance(e, this.player);
       e.angle = Math.atan2(this.player.y - e.y, this.player.x - e.x);
@@ -461,11 +500,11 @@ export class Simulation {
           }
         }
       } else if (e.charge > 0) {
-        this.move(e, normalize({ x: e.target.x - e.x, y: e.target.y - e.y }), 470 * dt, e.radius);
+        this.enemyMove(e, normalize({ x: e.target.x - e.x, y: e.target.y - e.y }), 470, dt);
         e.charge -= dt;
       } else if (e.kind === 'spitter') {
         if (d > 310 || !this.lineClear(e, this.player))
-          this.move(e, this.directionTo(e, this.player), 70 * slow * dt, e.radius);
+          this.enemyMove(e, this.directionTo(e, this.player), 70 * slow, dt);
         else if (d < 185)
           this.move(
             e,
@@ -483,13 +522,13 @@ export class Simulation {
           e.windup = 0.85;
           e.target = { ...this.player };
           e.cooldown = 3.6;
-        } else this.move(e, this.directionTo(e, this.player), 62 * slow * dt, e.radius);
+        } else this.enemyMove(e, this.directionTo(e, this.player), 62 * slow, dt);
       } else if (e.kind === 'boss') {
         if (e.cooldown <= 0) {
           e.windup = 1.0;
           e.target = { ...this.player };
         }
-        if (d > 220) this.move(e, this.directionTo(e, this.player), 26 * slow * dt, e.radius);
+        if (d > 220) this.enemyMove(e, this.directionTo(e, this.player), 26 * slow, dt);
       } else
         this.move(
           e,
@@ -503,7 +542,7 @@ export class Simulation {
           min = e.radius + other.radius - 3;
         if (dist < min && dist > 0) {
           const n = normalize({ x: e.x - other.x, y: e.y - other.y });
-          this.move(e, n, 35 * dt, e.radius);
+          this.enemyMove(e, n, 35, dt);
           this.move(other, { x: -n.x, y: -n.y }, 35 * dt, other.radius);
         }
       }
@@ -575,6 +614,7 @@ export class Simulation {
           continue;
         b.hits.add(e.id);
         this.damageEnemy(e, b.damage, b.color);
+        this.knockback(e, b.vx, b.vy, 190);
         if (b.owner === 'player') {
           if (this.skills.includes('cryo')) e.slow = 1.8;
           this.hitCount++;
@@ -587,7 +627,7 @@ export class Simulation {
                 .sort((a, c) => distance(source, a) - distance(source, c))[0];
               if (!t) break;
               this.emit('chain', source, { target: { x: t.x, y: t.y }, color: 0xb3eaf2 });
-              this.damageEnemy(t, 24, 0xb3eaf2);
+              this.damageEnemy(t, 24, 0xb3eaf2, 'chain');
               hit.add(t.id);
               source = t;
             }
@@ -603,15 +643,29 @@ export class Simulation {
     this.bullets = this.bullets.filter((b) => b.ttl > 0);
     this.barrels = this.barrels.filter((b) => b.hp > 0);
   }
-  private damageEnemy(e: Enemy, damage: number, color: number) {
+  private damageEnemy(e: Enemy, damage: number, color: number, cause: KillCause = 'bullet') {
     e.hp -= damage;
     e.flash = 0.08;
+    e.cause = cause;
     this.emit('hit', e, { color, value: Math.round(damage) });
+  }
+  /** Pushes an enemy along a direction. Heavier kinds resist more. */
+  private knockback(e: Enemy, dx: number, dy: number, force: number) {
+    const len = Math.hypot(dx, dy);
+    if (len < 0.001) return;
+    const mass =
+      e.kind === 'crawler' ? 1 : e.kind === 'spitter' ? 1.3 : e.kind === 'brute' ? 2.8 : 7;
+    const k = (e.knock ??= { x: 0, y: 0 });
+    k.x += (dx / len) * (force / mass);
+    k.y += (dy / len) * (force / mass);
   }
   private explode(p: Vec, r: number, damage: number, hurtPlayer: boolean) {
     this.emit('explosion', p, { value: r, color: 0xf7b280 });
     for (const e of this.enemies)
-      if (e.hp > 0 && distance(p, e) < r + e.radius) this.damageEnemy(e, damage, 0xf7b280);
+      if (e.hp > 0 && distance(p, e) < r + e.radius) {
+        this.damageEnemy(e, damage, 0xf7b280, 'explosion');
+        this.knockback(e, e.x - p.x, e.y - p.y, 340);
+      }
     if (hurtPlayer && distance(p, this.player) < r) this.hurt(18);
     for (const b of this.barrels)
       if (b.hp > 0 && b !== p && distance(p, b) < r) {
@@ -635,7 +689,15 @@ export class Simulation {
       this.combo++;
       this.comboTime = 3.2;
       this.bestCombo = Math.max(this.bestCombo, this.combo);
-      this.emit('kill', e, { color: e.kind === 'boss' ? 0xe8a1b4 : 0x94c598, value: e.radius });
+      this.emit('kill', e, {
+        color: e.kind === 'boss' ? 0xe8a1b4 : 0x94c598,
+        value: e.radius,
+        kind: e.kind,
+        cause: e.cause ?? 'bullet',
+        loud: e.kind === 'brute' || e.kind === 'boss',
+      });
+      // Heavy kills stop the world longer; regular kills only flinch.
+      this.freeze = Math.max(this.freeze, e.kind === 'brute' || e.kind === 'boss' ? 0.09 : 0.045);
       if (this.skills.includes('leech'))
         this.player.hp = Math.min(this.player.maxHp, this.player.hp + 3);
       if (this.random() < 0.16)
