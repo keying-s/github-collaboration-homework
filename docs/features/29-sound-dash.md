@@ -5,7 +5,7 @@
 - Issue：#29
 - 功能负责人（人 / GitHub）：fredericsetievi
 - 开发分支：`feat/fredericsetievi/sound-dash`
-- PR：（待开，集成时补录）
+- PR：#31
 - 评审者：（待分配）
 - 状态：开发中
 
