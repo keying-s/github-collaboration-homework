@@ -21,10 +21,10 @@ export class ArenaScene extends Phaser.Scene {
   create() {
     this.arenaRenderer = new ArenaRenderer(this, this.model, this.i18n);
     this.keys = this.input.keyboard!.addKeys(
-      'W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,SHIFT,R,E,Q',
+      'W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,SHIFT,R,E',
     ) as typeof this.keys;
     // Buffer tap actions between frames: short key presses must not disappear on key-up.
-    for (const key of ['SPACE', 'SHIFT', 'R', 'E', 'Q']) {
+    for (const key of ['SPACE', 'SHIFT', 'R', 'E']) {
       this.keys[key].on('down', () => this.actions.add(key));
     }
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
@@ -53,7 +53,6 @@ export class ArenaScene extends Phaser.Scene {
       dash: just('SPACE') || just('SHIFT'),
       reload: just('R'),
       interact: just('E'),
-      switchWeapon: just('Q'),
     };
     this.fireRequested = false;
     const dt = Math.min(delta / 1000, 0.04);

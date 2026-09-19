@@ -18,7 +18,6 @@ const idle: InputState = {
   dash: false,
   reload: false,
   interact: false,
-  switchWeapon: false,
 };
 function game() {
   const m = new Simulation(seededRandom(123));
@@ -102,17 +101,33 @@ test('paused and upgrade states freeze combat and input', () => {
   step(m, 2, { move: { x: 1, y: 0 }, firing: true });
   assert.deepEqual(m.player, before);
 });
-test('pickup changes weapon and can switch back without losing inventory', () => {
-  const m = game();
-  m.player.x = 494;
-  m.player.y = 425;
-  m.tick(1 / 60, { ...idle, interact: true });
-  assert.equal(m.player.weapon, 'shotgun');
-  assert.equal(m.player.ammo, 8);
-  assert.deepEqual(m.inventory, ['rifle', 'shotgun']);
-  m.tick(1 / 60, { ...idle, switchWeapon: true });
-  assert.equal(m.player.weapon, 'rifle');
-  assert.ok(m.player.reloadRemaining > 0);
+test('the starting weapon choice configures the whole run and refills its own magazine', () => {
+  const rifleRun = game();
+  assert.equal(rifleRun.player.weapon, 'rifle');
+  assert.equal(rifleRun.player.ammo, WEAPONS.rifle.magazine);
+  const flamerRun = new Simulation(seededRandom(123));
+  flamerRun.start(false, 'flamer');
+  flamerRun.waveDelay = 100;
+  flamerRun.barrels = [];
+  assert.equal(flamerRun.player.weapon, 'flamer');
+  assert.equal(flamerRun.player.ammo, WEAPONS.flamer.magazine);
+  const e = enemy(760, 445);
+  flamerRun.enemies = [e];
+  step(flamerRun, 0.25, { firing: true });
+  assert.ok(flamerRun.player.ammo < WEAPONS.flamer.magazine);
+  assert.ok(e.hp < 500);
+  assert.ok(
+    flamerRun.bullets.every((b) => b.enemy || b.flame),
+    'flamer projectiles must be flagged as flame particles',
+  );
+  // Flame particles die at the flamer's short range instead of crossing the arena.
+  assert.ok(
+    flamerRun.bullets.every(
+      (b) => b.enemy || Math.hypot(b.vx, b.vy) * b.ttl <= WEAPONS.flamer.range,
+    ),
+  );
+  flamerRun.tick(1 / 60, { ...idle, reload: true });
+  assert.ok(flamerRun.player.reloadRemaining > 0);
 });
 test('module pickup freezes combat; choice applies once and resumes combat', () => {
   const m = game();
@@ -175,8 +190,7 @@ test('explosive barrels damage enemies and chain to adjacent barrels', () => {
 test('new rooms refill health, ammunition and dash while retaining chosen build', () => {
   const m = game();
   m.skills = ['chain'];
-  m.player.weapon = 'shotgun';
-  m.inventory.push('shotgun');
+  m.player.weapon = 'flamer';
   m.player.hp = 12;
   m.player.ammo = 1;
   m.player.dashCooldown = 2;
@@ -184,7 +198,7 @@ test('new rooms refill health, ammunition and dash while retaining chosen build'
   m.nextLevel();
   assert.equal(m.levelIndex, 1);
   assert.equal(m.player.hp, 100);
-  assert.equal(m.player.ammo, 8);
+  assert.equal(m.player.ammo, WEAPONS.flamer.magazine);
   assert.equal(m.player.dashCooldown, 0);
   assert.deepEqual(m.skills, ['chain']);
 });
@@ -250,10 +264,10 @@ test('all six waves, boss, modules and exits form a complete three-room campaign
   assert.equal(m.skills.length, 4);
 });
 
-test('every room keeps the spawn, weapon drop and portal clear of cover and reachable', () => {
+test('every room keeps the spawn, module drop and portal clear of cover and reachable', () => {
   // Adding or editing a room must never bury a spawn point behind cover.
   const spawn: Vec = { x: 640, y: 445 };
-  const weaponDrop: Vec = { x: 494, y: 425 };
+  const moduleDrop: Vec = { x: 640, y: 365 };
   const portal: Vec = { x: 1160, y: 400 };
   const bossSpawn: Vec = { x: 640, y: 190 };
   const enemySpawns: Vec[] = [
@@ -266,7 +280,7 @@ test('every room keeps the spawn, weapon drop and portal clear of cover and reac
   ];
   const clearOf = (level: (typeof LEVELS)[number], p: Vec, r: number) =>
     !level.obstacles.some((b) => circleRect(p, r, b));
-  const reachable = (level: (typeof LEVELS)[number], from: Vec, to: Vec) => {
+  const reachable = (level: (typeof LEVELS)[number], from: Vec, to: Vec, tolerance = 40) => {
     const step = 20;
     const free = (p: Vec) =>
       p.x >= 80 &&
@@ -278,7 +292,7 @@ test('every room keeps the spawn, weapon drop and portal clear of cover and reac
     const queue: Vec[] = [from];
     while (queue.length) {
       const p = queue.shift()!;
-      if (distance(p, to) <= step * 2) return true;
+      if (distance(p, to) <= tolerance) return true;
       for (const d of [
         { x: step, y: 0 },
         { x: -step, y: 0 },
@@ -297,11 +311,12 @@ test('every room keeps the spawn, weapon drop and portal clear of cover and reac
   LEVELS.forEach((level, index) => {
     const room = `room ${index + 1}`;
     assert.ok(clearOf(level, spawn, 17), `${room} player spawn is inside cover`);
-    assert.ok(clearOf(level, weaponDrop, 17), `${room} weapon drop is inside cover`);
     assert.ok(clearOf(level, portal, 17), `${room} portal is inside cover`);
     for (const point of enemySpawns)
       assert.ok(clearOf(level, point, 31), `${room} enemy spawn is inside cover`);
-    assert.ok(reachable(level, spawn, weaponDrop), `${room} weapon drop is unreachable`);
+    // The module may rest on top of cover (rooms place it on a center block), but a
+    // player must always be able to stand within its 78px pickup radius.
+    assert.ok(reachable(level, spawn, moduleDrop, 78), `${room} module drop is unreachable`);
     assert.ok(reachable(level, spawn, portal), `${room} portal is unreachable`);
     if (index === LEVELS.length - 1)
       assert.ok(clearOf(level, bossSpawn, 58), 'boss spawn is inside cover');

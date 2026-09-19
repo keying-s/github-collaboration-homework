@@ -977,6 +977,58 @@ button:hover {
   background: #435039;
   box-shadow: 0 1px 3px #0002;
 }
+.weapon-choice {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  width: 300px;
+  max-width: 100%;
+  margin-bottom: 13px;
+}
+.weapon-choice .choice-label {
+  grid-column: 1 / -1;
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: #8a9d7e;
+}
+.weapon-pick {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 12px 12px 14px;
+  background: #0e201880;
+  border: 1px solid #52634a55;
+  border-radius: 8px;
+  color: #e8dcc2;
+  text-align: left;
+  transition:
+    background 0.2s,
+    transform 0.2s,
+    border-color 0.2s;
+}
+.weapon-pick .pick-art {
+  width: 96px;
+  height: 36px;
+}
+.weapon-pick .pick-art svg {
+  width: 100%;
+  height: 100%;
+}
+.weapon-pick b {
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+.weapon-pick small {
+  font-size: 10px;
+  line-height: 1.5;
+  color: #8fa383;
+}
+.weapon-pick:hover {
+  background: #435039;
+  border-color: #efb58a66;
+  transform: translateY(-2px);
+}
 .start-button {
   display: flex;
   align-items: center;
