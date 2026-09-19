@@ -9,6 +9,7 @@ export interface Rect extends Vec {
 export type WeaponId = 'rifle' | 'shotgun' | 'arc';
 export type SkillId = 'chain' | 'cryo' | 'pierce' | 'nova' | 'leech' | 'haste';
 export type EnemyKind = 'crawler' | 'spitter' | 'brute' | 'boss';
+export type KillCause = 'bullet' | 'explosion' | 'chain';
 export type Phase = 'menu' | 'combat' | 'upgrade' | 'exit' | 'won' | 'lost';
 export type Locale = 'zh-CN' | 'en';
 export type StatusMessageKey =
@@ -80,6 +81,9 @@ export interface Enemy extends Vec {
   target: Vec;
   charge: number;
   deathHandled?: boolean;
+  knock?: Vec;
+  cause?: KillCause;
+  stuck?: number;
 }
 export interface Bullet extends Vec {
   id: number;
@@ -132,6 +136,8 @@ export interface GameEvent extends Vec {
   target?: Vec;
   text?: LocalizedText;
   loud?: boolean;
+  kind?: EnemyKind;
+  cause?: KillCause;
 }
 export interface Level {
   name: LocalizedText;
