@@ -48,18 +48,18 @@ export class AudioEngine {
   private step = 0;
   private nextStepTime = 0;
   private combat = false;
-  /** Tempo 92 BPM; one step is a sixteenth note. */
-  private static readonly STEP = 60 / 92 / 4;
+  /** Tempo 124 BPM; one step is a sixteenth note. */
+  private static readonly STEP = 60 / 124 / 4;
   /** A-minor pentatonic pluck pool: A3 C4 D4 E4 G4. */
   private static readonly PENTATONIC = [220, 261.63, 293.66, 329.63, 392];
-  private static readonly ARP_MENUS = [0, -1, -1, 2, -1, -1, 1, -1, -1, -1, 4, -1, -1, -1, 3, -1];
-  private static readonly ARP_COMBAT = [0, -1, 2, -1, 1, -1, 4, -1, 0, -1, 3, -1, 2, 4, 1, -1];
+  private static readonly ARP_MENUS = [0, -1, 2, -1, 4, -1, 2, -1, 0, -1, 2, -1, 4, -1, 3, -1];
+  private static readonly ARP_COMBAT = [0, 2, 4, 2, 0, 2, 4, 3, 0, 2, 4, 2, 1, 3, 4, 3];
   private static readonly BAR_ROOTS = [55, 55, 43.65, 49];
   private static readonly BAR_PADS = [
     [110, 130.81, 164.81],
     [110, 130.81, 164.81],
     [87.31, 110, 130.81],
-    [98, 123.47, 146.83],
+    [82.41, 103.83, 123.47],
   ];
   constructor() {
     const prefs = loadPrefs();
@@ -211,20 +211,28 @@ export class AudioEngine {
       stepDur = AudioEngine.STEP,
       barDur = stepDur * 16;
     if (inBar === 0) {
-      this.bass(AudioEngine.BAR_ROOTS[bar], t, barDur);
       if (bar % 2 === 0) this.pad(AudioEngine.BAR_PADS[bar], t, barDur * 2);
+      if (this.combat && step === 48) this.riser(t, stepDur * 16);
+    }
+    // Driving eighth-note bass; jumps an octave on the last off-beat in combat.
+    if (inBar % 2 === 0) {
+      const root = AudioEngine.BAR_ROOTS[bar];
+      this.bass(this.combat && inBar === 14 ? root * 2 : root, t, stepDur * 1.7);
     }
     if (this.combat) {
+      if (inBar % 4 === 0) this.kick(t);
+      if (inBar === 4 || inBar === 12) this.snare(t);
+      if (inBar % 2 === 1) this.hat(t, inBar % 4 === 3 ? 0.11 : 0.06);
+    } else {
       if (inBar === 0 || inBar === 8) this.kick(t);
-      if (inBar % 4 === 2) this.hat(t);
+      if (inBar % 4 === 2) this.hat(t, 0.05);
     }
     const arp = this.combat ? AudioEngine.ARP_COMBAT : AudioEngine.ARP_MENUS;
-    const note = AudioEngine.PENTATONIC[arp[inBar]];
-    if (arp[inBar] >= 0 && (this.combat || bar % 2 === 1)) this.pluck(note, t);
+    if (arp[inBar] >= 0) this.pluck(AudioEngine.PENTATONIC[arp[inBar]], t);
   }
   private applyMusicGain() {
     if (this.musicBus && this.context) {
-      const target = this.musicMuted ? 0 : 0.6 * this.musicVolume;
+      const target = this.musicMuted ? 0 : 0.7 * this.musicVolume;
       this.musicBus.gain.setTargetAtTime(target, this.context.currentTime, 0.05);
     }
   }
@@ -251,17 +259,16 @@ export class AudioEngine {
     osc.type = 'sawtooth';
     osc.frequency.value = freq;
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(320, t);
-    filter.frequency.exponentialRampToValueAtTime(130, t + dur);
+    filter.frequency.setValueAtTime(520, t);
+    filter.frequency.exponentialRampToValueAtTime(150, t + dur);
     gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.linearRampToValueAtTime(0.5, t + 0.06);
-    gain.gain.setTargetAtTime(0.32, t + 0.12, 0.6);
-    gain.gain.setTargetAtTime(0.0001, t + dur - 0.12, 0.05);
+    gain.gain.linearRampToValueAtTime(0.5, t + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
     osc.connect(filter);
     filter.connect(gain);
     gain.connect(this.musicBus!);
     osc.start(t);
-    osc.stop(t + dur + 0.3);
+    osc.stop(t + dur + 0.05);
     osc.onended = () => {
       osc.disconnect();
       filter.disconnect();
@@ -296,10 +303,10 @@ export class AudioEngine {
     const osc = ctx.createOscillator(),
       gain = ctx.createGain();
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(130, t);
-    osc.frequency.exponentialRampToValueAtTime(42, t + 0.12);
-    gain.gain.setValueAtTime(0.55, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.17);
+    osc.frequency.setValueAtTime(150, t);
+    osc.frequency.exponentialRampToValueAtTime(40, t + 0.11);
+    gain.gain.setValueAtTime(0.65, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
     osc.connect(gain);
     gain.connect(this.musicBus!);
     osc.start(t);
@@ -309,7 +316,41 @@ export class AudioEngine {
       gain.disconnect();
     };
   }
-  private hat(t: number) {
+  private snare(t: number) {
+    const ctx = this.context!;
+    const source = ctx.createBufferSource(),
+      tone = ctx.createOscillator(),
+      filter = ctx.createBiquadFilter(),
+      gain = ctx.createGain(),
+      toneGain = ctx.createGain();
+    source.buffer = this.noise ?? null;
+    filter.type = 'bandpass';
+    filter.frequency.value = 1900;
+    filter.Q.value = 0.8;
+    gain.gain.setValueAtTime(0.28, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.13);
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.musicBus!);
+    tone.type = 'triangle';
+    tone.frequency.setValueAtTime(210, t);
+    toneGain.gain.setValueAtTime(0.16, t);
+    toneGain.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+    tone.connect(toneGain);
+    toneGain.connect(this.musicBus!);
+    source.start(t);
+    source.stop(t + 0.15);
+    tone.start(t);
+    tone.stop(t + 0.1);
+    source.onended = () => {
+      source.disconnect();
+      filter.disconnect();
+      gain.disconnect();
+      tone.disconnect();
+      toneGain.disconnect();
+    };
+  }
+  private hat(t: number, level: number) {
     const ctx = this.context!;
     const source = ctx.createBufferSource(),
       filter = ctx.createBiquadFilter(),
@@ -317,13 +358,39 @@ export class AudioEngine {
     source.buffer = this.noise ?? null;
     filter.type = 'highpass';
     filter.frequency.value = 6500;
-    gain.gain.setValueAtTime(0.09, t);
+    gain.gain.setValueAtTime(level, t);
     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
     source.connect(filter);
     filter.connect(gain);
     gain.connect(this.musicBus!);
     source.start(t);
     source.stop(t + 0.05);
+    source.onended = () => {
+      source.disconnect();
+      filter.disconnect();
+      gain.disconnect();
+    };
+  }
+  /** Noise sweep across the last bar of the loop so each restart hits harder. */
+  private riser(t: number, dur: number) {
+    const ctx = this.context!;
+    const source = ctx.createBufferSource(),
+      filter = ctx.createBiquadFilter(),
+      gain = ctx.createGain();
+    source.buffer = this.noise ?? null;
+    source.loop = true;
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(300, t);
+    filter.frequency.exponentialRampToValueAtTime(5200, t + dur);
+    filter.Q.value = 1.1;
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.linearRampToValueAtTime(0.1, t + dur * 0.85);
+    gain.gain.linearRampToValueAtTime(0.0001, t + dur);
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.musicBus!);
+    source.start(t);
+    source.stop(t + dur + 0.02);
     source.onended = () => {
       source.disconnect();
       filter.disconnect();
@@ -339,14 +406,14 @@ export class AudioEngine {
     osc.frequency.value = freq;
     filter.type = 'lowpass';
     filter.frequency.value = 1900;
-    gain.gain.setValueAtTime(0.11, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+    gain.gain.setValueAtTime(0.12, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
     osc.connect(filter);
     filter.connect(gain);
     gain.connect(this.musicBus!);
     if (this.echo) gain.connect(this.echo);
     osc.start(t);
-    osc.stop(t + 0.25);
+    osc.stop(t + 0.2);
     osc.onended = () => {
       osc.disconnect();
       filter.disconnect();
