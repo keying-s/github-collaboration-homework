@@ -11,6 +11,8 @@
 | 第四个房间「排热竖井 / THE VENT SHAFT」：排气区配色、6 掩体三通道、3 爆炸桶、两波 17 敌（含 3 重甲冲锋），菜单路线图与任务文案同步 | fredericsetievi | [#13](https://github.com/keying-s/github-collaboration-homework/pull/13) · [#12](https://github.com/keying-s/github-collaboration-homework/issues/12) | 已合并（09-19） |
 | 主菜单布局修复：任意窗口尺寸下画面铺满舞台框、全屏仅留游戏画面、菜单文字不再裁切 | fredericsetievi | [#15](https://github.com/keying-s/github-collaboration-homework/pull/15) · [#14](https://github.com/keying-s/github-collaboration-homework/issues/14) | 已合并（09-19，经队友试玩评审后合并） |
 | 主页初始枪械选择（两版实现：菜单卡片 → 配装弹窗） | fredericsetievi | [#9](https://github.com/keying-s/github-collaboration-homework/pull/9) · [#8](https://github.com/keying-s/github-collaboration-homework/issues/8) | 已放弃，未合并 |
+| 击杀手感强化：命中定格、击退、按死因的尸体动画、镜头震动、枪口火光、连击反馈 | fredericsetievi | [#27](https://github.com/keying-s/github-collaboration-homework/pull/27) · [#21](https://github.com/keying-s/github-collaboration-homework/issues/21) | 已合并（09-19） |
+| 音效补全与闪避可读性：命中 / 连击 / 低血量音效 + 闪避就绪环 | fredericsetievi | 见 Issue [#29](https://github.com/keying-s/github-collaboration-homework/issues/29) · PR 待评审 | 待评审 |
 
 xmy-lab 目前在 `ember-protocol/` 上暂无功能提交；其历史内容为 `class-strike/` 原型与 `team-notes.md` 协作演练。
 
