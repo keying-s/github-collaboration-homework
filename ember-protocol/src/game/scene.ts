@@ -19,7 +19,7 @@ export class ArenaScene extends Phaser.Scene {
     super('Arena');
   }
   create() {
-    this.arenaRenderer = new ArenaRenderer(this, this.model, this.i18n);
+    this.arenaRenderer = new ArenaRenderer(this, this.model, this.i18n, this.audio);
     this.keys = this.input.keyboard!.addKeys(
       'W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,SHIFT,R,E,Q',
     ) as typeof this.keys;
