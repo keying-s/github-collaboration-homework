@@ -5,7 +5,7 @@
 - Issue：#32
 - 功能负责人（人 / GitHub）：fredericsetievi
 - 开发分支：feat/fredericsetievi/onboarding-guide
-- PR：PRNUM
+- PR：33
 - 评审者：（待分配）
 - 状态：待评审
 
