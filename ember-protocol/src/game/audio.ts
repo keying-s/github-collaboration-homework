@@ -5,6 +5,26 @@ export class AudioEngine {
   muted = false;
   private context?: AudioContext;
   private bus?: GainNode;
+  private musicBus?: GainNode;
+  private echo?: DelayNode;
+  private noise?: AudioBuffer;
+  private musicTimer?: number;
+  private step = 0;
+  private nextStepTime = 0;
+  private combat = false;
+  /** Tempo 92 BPM; one step is a sixteenth note. */
+  private static readonly STEP = 60 / 92 / 4;
+  /** A-minor pentatonic pluck pool: A3 C4 D4 E4 G4. */
+  private static readonly PENTATONIC = [220, 261.63, 293.66, 329.63, 392];
+  private static readonly ARP_MENUS = [0, -1, -1, 2, -1, -1, 1, -1, -1, -1, 4, -1, -1, -1, 3, -1];
+  private static readonly ARP_COMBAT = [0, -1, 2, -1, 1, -1, 4, -1, 0, -1, 3, -1, 2, 4, 1, -1];
+  private static readonly BAR_ROOTS = [55, 55, 43.65, 49];
+  private static readonly BAR_PADS = [
+    [110, 130.81, 164.81],
+    [110, 130.81, 164.81],
+    [87.31, 110, 130.81],
+    [98, 123.47, 146.83],
+  ];
   unlock() {
     try {
       this.context ??= new AudioContext();
@@ -13,7 +33,32 @@ export class AudioEngine {
         this.bus.gain.value = 0.17;
         this.bus.connect(this.context.destination);
       }
+      if (!this.musicBus) {
+        this.musicBus = this.context.createGain();
+        this.musicBus.gain.value = 0.6;
+        this.musicBus.connect(this.context.destination);
+        const echo = this.context.createDelay(1);
+        echo.delayTime.value = AudioEngine.STEP * 2;
+        const feedback = this.context.createGain();
+        feedback.gain.value = 0.3;
+        echo.connect(feedback);
+        feedback.connect(echo);
+        const echoOut = this.context.createGain();
+        echoOut.gain.value = 0.35;
+        echo.connect(echoOut);
+        echoOut.connect(this.musicBus);
+        this.echo = echo;
+        const noise = this.context.createBuffer(
+          1,
+          this.context.sampleRate * 0.1,
+          this.context.sampleRate,
+        );
+        const data = noise.getChannelData(0);
+        for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+        this.noise = noise;
+      }
       void this.context.resume();
+      if (!this.muted) this.startMusic();
     } catch {
       /* Audio is optional; gameplay remains available. */
     }
@@ -21,7 +66,12 @@ export class AudioEngine {
   toggle() {
     this.muted = !this.muted;
     this.unlock();
+    if (this.muted) this.stopMusic();
     return this.muted;
+  }
+  /** Combat switches the loop to the denser drum-driven arrangement. */
+  setCombat(combat: boolean) {
+    this.combat = combat;
   }
   play(event: GameEvent) {
     if (this.muted || !this.context || !this.bus) return;
@@ -55,6 +105,154 @@ export class AudioEngine {
     osc.stop(t + duration);
     osc.onended = () => {
       osc.disconnect();
+      gain.disconnect();
+    };
+  }
+  /** Lookahead scheduler keeping ~150ms of music queued on the audio clock. */
+  private startMusic() {
+    if (this.musicTimer || !this.context) return;
+    this.step = 0;
+    this.nextStepTime = this.context.currentTime + 0.1;
+    this.musicTimer = window.setInterval(() => this.scheduleMusic(), 40);
+  }
+  private stopMusic() {
+    if (this.musicTimer) {
+      window.clearInterval(this.musicTimer);
+      this.musicTimer = undefined;
+    }
+  }
+  private scheduleMusic() {
+    if (!this.context || !this.musicBus) return;
+    while (this.nextStepTime < this.context.currentTime + 0.15) {
+      this.scheduleStep(this.step, this.nextStepTime);
+      this.step = (this.step + 1) % 64;
+      this.nextStepTime += AudioEngine.STEP;
+    }
+  }
+  private scheduleStep(step: number, t: number) {
+    const bar = Math.floor(step / 16),
+      inBar = step % 16,
+      stepDur = AudioEngine.STEP,
+      barDur = stepDur * 16;
+    if (inBar === 0) {
+      this.bass(AudioEngine.BAR_ROOTS[bar], t, barDur);
+      if (bar % 2 === 0) this.pad(AudioEngine.BAR_PADS[bar], t, barDur * 2);
+    }
+    if (this.combat) {
+      if (inBar === 0 || inBar === 8) this.kick(t);
+      if (inBar % 4 === 2) this.hat(t);
+    }
+    const arp = this.combat ? AudioEngine.ARP_COMBAT : AudioEngine.ARP_MENUS;
+    const note = AudioEngine.PENTATONIC[arp[inBar]];
+    if (arp[inBar] >= 0 && (this.combat || bar % 2 === 1)) this.pluck(note, t);
+  }
+  private bass(freq: number, t: number, dur: number) {
+    const ctx = this.context!;
+    const osc = ctx.createOscillator(),
+      filter = ctx.createBiquadFilter(),
+      gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.value = freq;
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(320, t);
+    filter.frequency.exponentialRampToValueAtTime(130, t + dur);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.linearRampToValueAtTime(0.5, t + 0.06);
+    gain.gain.setTargetAtTime(0.32, t + 0.12, 0.6);
+    gain.gain.setTargetAtTime(0.0001, t + dur - 0.12, 0.05);
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.musicBus!);
+    osc.start(t);
+    osc.stop(t + dur + 0.3);
+    osc.onended = () => {
+      osc.disconnect();
+      filter.disconnect();
+      gain.disconnect();
+    };
+  }
+  private pad(notes: number[], t: number, dur: number) {
+    const ctx = this.context!;
+    const gain = ctx.createGain(),
+      filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 720;
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.linearRampToValueAtTime(0.085, t + 1.4);
+    gain.gain.setTargetAtTime(0.0001, t + dur - 0.6, 0.35);
+    filter.connect(gain);
+    gain.connect(this.musicBus!);
+    for (const freq of notes)
+      for (const detune of [-4, 4]) {
+        const osc = ctx.createOscillator();
+        osc.type = 'sawtooth';
+        osc.frequency.value = freq;
+        osc.detune.value = detune;
+        osc.connect(filter);
+        osc.start(t);
+        osc.stop(t + dur);
+        osc.onended = () => osc.disconnect();
+      }
+  }
+  private kick(t: number) {
+    const ctx = this.context!;
+    const osc = ctx.createOscillator(),
+      gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(130, t);
+    osc.frequency.exponentialRampToValueAtTime(42, t + 0.12);
+    gain.gain.setValueAtTime(0.55, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.17);
+    osc.connect(gain);
+    gain.connect(this.musicBus!);
+    osc.start(t);
+    osc.stop(t + 0.2);
+    osc.onended = () => {
+      osc.disconnect();
+      gain.disconnect();
+    };
+  }
+  private hat(t: number) {
+    const ctx = this.context!;
+    const source = ctx.createBufferSource(),
+      filter = ctx.createBiquadFilter(),
+      gain = ctx.createGain();
+    source.buffer = this.noise ?? null;
+    filter.type = 'highpass';
+    filter.frequency.value = 6500;
+    gain.gain.setValueAtTime(0.09, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.musicBus!);
+    source.start(t);
+    source.stop(t + 0.05);
+    source.onended = () => {
+      source.disconnect();
+      filter.disconnect();
+      gain.disconnect();
+    };
+  }
+  private pluck(freq: number, t: number) {
+    const ctx = this.context!;
+    const osc = ctx.createOscillator(),
+      filter = ctx.createBiquadFilter(),
+      gain = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.value = freq;
+    filter.type = 'lowpass';
+    filter.frequency.value = 1900;
+    gain.gain.setValueAtTime(0.11, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.musicBus!);
+    if (this.echo) gain.connect(this.echo);
+    osc.start(t);
+    osc.stop(t + 0.25);
+    osc.onended = () => {
+      osc.disconnect();
+      filter.disconnect();
       gain.disconnect();
     };
   }

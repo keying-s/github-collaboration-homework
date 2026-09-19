@@ -174,6 +174,7 @@ export class Interface {
     const m = this.model;
     const p = m.player;
     const menu = m.phase === 'menu';
+    this.audio.setCombat(['combat', 'exit', 'upgrade'].includes(m.phase));
     const text = (key: TranslationKey, values: Record<string, string | number> = {}) =>
       this.i18n.t(key, values);
     this.nodes['arena-hud'].classList.toggle('hidden', menu);
