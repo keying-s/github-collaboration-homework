@@ -58,7 +58,37 @@ button:hover {
   background: radial-gradient(ellipse at 50% 0%, #20312966, transparent 60%), #101b1b;
 }
 .shell:fullscreen {
-  overflow: auto;
+  height: 100vh;
+  max-width: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.shell:fullscreen .topbar,
+.shell:fullscreen .sidebar,
+.shell:fullscreen footer,
+.shell:fullscreen .field-top,
+.shell:fullscreen .field-bottom {
+  display: none;
+}
+.shell:fullscreen .workspace {
+  display: block;
+  flex: 1;
+  min-height: 0;
+  max-width: none;
+  padding: 0;
+}
+.shell:fullscreen .field-wrap {
+  height: 100%;
+}
+.shell:fullscreen .field-stage {
+  height: 100%;
+}
+.shell:fullscreen .arena-shell {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
 }
 .topbar {
   height: 100px;
@@ -349,14 +379,23 @@ button:hover {
   width: 6px;
   height: 6px;
 }
+.field-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  container-type: size;
+}
 .arena-shell {
   position: relative;
-  aspect-ratio: 16/10;
+  width: min(100cqw, 160cqh);
+  aspect-ratio: 16 / 10;
+  margin: auto;
   border: 1px solid #49564a;
   border-radius: 10px;
   overflow: hidden;
   background: #1b2b2a;
   box-shadow: 0 12px 40px #0003;
+  container-type: size;
 }
 #game {
   position: absolute;
@@ -847,8 +886,9 @@ button:hover {
 }
 .menu-content {
   position: absolute;
-  top: 15%;
+  top: 50%;
   left: 6%;
+  translate: 0 -50%;
   width: 52%;
   max-width: 480px;
   pointer-events: auto;
@@ -870,7 +910,7 @@ button:hover {
   background: #cfb18a;
 }
 .menu-content h1 {
-  font-size: clamp(36px, 4vw, 65px);
+  font-size: clamp(28px, 6.5cqh, 65px);
   font-weight: 800;
   line-height: 1.22;
   letter-spacing: 2px;
@@ -1287,17 +1327,6 @@ kbd {
   .mission-panel h2 {
     font-size: 24px;
   }
-  .menu-content {
-    top: 18%;
-  }
-  .arena-shell {
-    max-height: calc(100vh - 226px);
-    aspect-ratio: auto;
-    min-height: 650px;
-  }
-  .menu-content h1 {
-    font-size: 68px;
-  }
 }
 @media (max-width: 1250px) {
   .shell {
@@ -1321,13 +1350,6 @@ kbd {
     gap: 18px;
     grid-template-columns: minmax(0, 1fr) 220px;
     padding-top: 14px;
-  }
-  .menu-content {
-    top: 12%;
-  }
-  .menu-content h1 {
-    font-size: 42px;
-    margin: 20px 0 14px;
   }
   .menu-description {
     font-size: 10px;
@@ -1405,20 +1427,13 @@ kbd {
   .field-top > span {
     display: none;
   }
-  .menu-content h1 {
-    font-size: 50px;
-  }
-  .menu-content {
-    top: 14%;
-  }
-  .menu-tip {
-    font-size: 9px;
-  }
-  .menu-description {
-    font-size: 12px;
+  .field-stage {
+    display: block;
+    container-type: normal;
   }
   .arena-shell {
-    min-height: 450px;
+    width: 100%;
+    margin: 0;
   }
   .brand {
     font-size: 18px;
@@ -1459,16 +1474,9 @@ kbd {
   .tools {
     margin-left: auto;
   }
-  .arena-shell {
-    min-height: 520px;
-  }
   .menu-content {
     width: 85%;
     left: 8%;
-    top: 12%;
-  }
-  .menu-content h1 {
-    font-size: 43px;
   }
   .menu-overlay {
     background: #14271be8;
@@ -1570,7 +1578,7 @@ kbd {
     display: none;
   }
 }
-@media (min-width: 1001px) and (max-height: 850px) {
+@media (min-width: 1001px) {
   .shell {
     height: 100dvh;
     display: flex;
@@ -1578,38 +1586,45 @@ kbd {
     overflow: hidden;
   }
   .topbar {
-    height: 76px;
     flex-shrink: 0;
   }
   .workspace {
     flex: 1;
     min-height: 0;
-    padding-top: 12px;
-    gap: 22px;
   }
   .field-wrap {
     min-height: 0;
   }
-  .field-top {
-    height: 29px;
-    flex-shrink: 0;
-  }
+  .field-top,
   .field-bottom {
-    height: 31px;
     flex-shrink: 0;
-  }
-  .arena-shell {
-    aspect-ratio: auto;
-    flex: 1;
-    min-height: 0;
-    max-height: none;
   }
   .sidebar {
     overflow-y: auto;
     scrollbar-width: thin;
     scrollbar-color: #354b38 transparent;
-    gap: 13px;
     padding-right: 3px;
+  }
+  footer {
+    flex-shrink: 0;
+  }
+}
+@media (min-width: 1001px) and (max-height: 850px) {
+  .topbar {
+    height: 76px;
+  }
+  .workspace {
+    padding-top: 12px;
+    gap: 22px;
+  }
+  .field-top {
+    height: 29px;
+  }
+  .field-bottom {
+    height: 31px;
+  }
+  .sidebar {
+    gap: 13px;
   }
   .mission-panel h2 {
     font-size: 19px;
@@ -1651,13 +1666,6 @@ kbd {
   }
   .fair-note {
     padding: 10px 0;
-  }
-  .menu-content {
-    top: 12%;
-  }
-  .menu-content h1 {
-    font-size: clamp(36px, 3.9vw, 57px);
-    margin: 22px 0 17px;
   }
   .menu-description {
     margin-bottom: 22px;
