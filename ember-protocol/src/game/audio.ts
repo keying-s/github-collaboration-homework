@@ -50,6 +50,8 @@ export class AudioEngine {
   private nextStepTime = 0;
   private combat = false;
   private bossPhase2 = false;
+  /** Rate-limit so a shotgun's many pellet impacts don't machine-gun the hit sound. */
+  private lastHitAt = 0;
   /** Tempo 112 BPM; one step is a sixteenth note. */
   private static readonly STEP = 60 / 112 / 4;
   /**
@@ -245,6 +247,10 @@ export class AudioEngine {
   }
   play(event: GameEvent) {
     if (this.sfxMuted || this.sfxVolume <= 0 || !this.context || !this.bus) return;
+    if (event.type === 'hit') {
+      this.playHit();
+      return;
+    }
     const bank: Partial<Record<GameEvent['type'], [number, number, number, OscillatorType]>> = {
       shot: [event.loud ? 190 : 300, 70, 0.06, 'sawtooth'],
       kill: [210, 95, 0.09, 'triangle'],
@@ -277,6 +283,108 @@ export class AudioEngine {
       osc.disconnect();
       gain.disconnect();
     };
+  }
+  /**
+   * Bullet-on-enemy impact: a crisp noise transient plus a short low body thump.
+   * Rate-limited so dense firefights stay punchy instead of turning into a Buzz.
+   */
+  private playHit() {
+    const ctx = this.context!,
+      bus = this.bus!,
+      t = ctx.currentTime;
+    if (t - this.lastHitAt < 0.03) return;
+    this.lastHitAt = t;
+    const vol = this.sfxVolume;
+    if (this.noise) {
+      const src = ctx.createBufferSource(),
+        hp = ctx.createBiquadFilter(),
+        g = ctx.createGain();
+      src.buffer = this.noise;
+      hp.type = 'highpass';
+      hp.frequency.value = 1500;
+      g.gain.setValueAtTime(0.22 * vol, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+      src.connect(hp);
+      hp.connect(g);
+      g.connect(bus);
+      src.start(t);
+      src.stop(t + 0.06);
+      src.onended = () => {
+        src.disconnect();
+        hp.disconnect();
+        g.disconnect();
+      };
+    }
+    const osc = ctx.createOscillator(),
+      og = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(180, t);
+    osc.frequency.exponentialRampToValueAtTime(90, t + 0.06);
+    og.gain.setValueAtTime(0.16 * vol, t);
+    og.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
+    osc.connect(og);
+    og.connect(bus);
+    osc.start(t);
+    osc.stop(t + 0.08);
+    osc.onended = () => {
+      osc.disconnect();
+      og.disconnect();
+    };
+  }
+  /**
+   * Kill-streak escalation chime. `tier` is 1-3 (combo 4 / 8 / 12); the pitch
+   * climbs C5 -> E5 -> G5 with a bright upward bend so each tier-up feels earned.
+   */
+  playCombo(tier: number) {
+    if (this.sfxMuted || this.sfxVolume <= 0 || !this.context || !this.bus) return;
+    const ctx = this.context,
+      bus = this.bus,
+      t = ctx.currentTime;
+    const base = [523.25, 659.25, 783.99, 1046.5][Math.max(0, Math.min(3, tier))];
+    const osc = ctx.createOscillator(),
+      g = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(base, t);
+    osc.frequency.exponentialRampToValueAtTime(base * 1.5, t + 0.12);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.3 * this.sfxVolume, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+    osc.connect(g);
+    g.connect(bus);
+    if (this.echo) g.connect(this.echo);
+    osc.start(t);
+    osc.stop(t + 0.25);
+    osc.onended = () => {
+      osc.disconnect();
+      g.disconnect();
+    };
+  }
+  /** Low-HP heartbeat: a soft "lub-dub" that loops while the player is critical. */
+  playHeartbeat() {
+    if (this.sfxMuted || this.sfxVolume <= 0 || !this.context || !this.bus) return;
+    const ctx = this.context,
+      bus = this.bus;
+    const beat = (delay: number, level: number) => {
+      const t = ctx.currentTime + delay;
+      const osc = ctx.createOscillator(),
+        g = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(72, t);
+      osc.frequency.exponentialRampToValueAtTime(38, t + 0.12);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(level * this.sfxVolume, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+      osc.connect(g);
+      g.connect(bus);
+      osc.start(t);
+      osc.stop(t + 0.2);
+      osc.onended = () => {
+        osc.disconnect();
+        g.disconnect();
+      };
+    };
+    beat(0, 0.5);
+    beat(0.22, 0.32);
   }
   /** Lookahead scheduler keeping ~150ms of music queued on the audio clock. */
   private startMusic() {

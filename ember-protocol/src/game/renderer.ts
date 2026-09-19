@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { WEAPONS } from './config';
 import { distance, seededRandom } from './math';
 import type { Simulation } from './simulation';
+import type { AudioEngine } from './audio';
 import type { Enemy, GameEvent, Vec, WeaponId } from './types';
 import type { I18n } from '../i18n';
 
@@ -59,12 +60,15 @@ export class ArenaRenderer {
   private recoil = { x: 0, y: 0, life: 0 };
   private edgeFlash = 0;
   private shotShakeAt = -1;
+  private shownComboTier = 0;
+  private lowHpTimer = 0;
   private drawnLevel = -1;
   private random = seededRandom(42);
   constructor(
     private scene: Phaser.Scene,
     private model: Simulation,
     private i18n: I18n,
+    private audio: AudioEngine,
   ) {
     this.floor = scene.add.graphics();
     this.ink = scene.add.graphics();
@@ -197,6 +201,15 @@ export class ArenaRenderer {
       m = this.model;
     g.clear();
     if (this.recoil.life > 0) this.recoil.life = Math.max(0, this.recoil.life - dt);
+    const pl = this.model.player;
+    if (this.model.phase === 'combat' && pl.hp > 0 && pl.hp / pl.maxHp < 0.3) {
+      this.lowHpTimer -= dt;
+      if (this.lowHpTimer <= 0) {
+        this.audio.playHeartbeat();
+        this.lowHpTimer = 0.9;
+        this.edgeFlash = Math.max(this.edgeFlash, 0.14);
+      }
+    } else this.lowHpTimer = 0;
     this.drawPortal(g, time);
     for (const b of m.barrels) {
       g.fillStyle(0x091619, 0.4).fillEllipse(b.x + 5, b.y + 8, 40, 25);
@@ -296,6 +309,20 @@ export class ArenaRenderer {
       }
       if (p.invincible > 0) {
         g.lineStyle(2, 0xf6cba4, 0.3 + Math.sin(time * 20) * 0.2).strokeCircle(p.x, p.y, 26);
+      }
+      const maxDash = m.skills.includes('nova') ? 1.65 : 2.2;
+      if (p.dashCooldown > 0) {
+        g.lineStyle(3, 0x8fd3e6, 0.85).beginPath();
+        g.arc(
+          p.x,
+          p.y,
+          33,
+          -Math.PI / 2,
+          -Math.PI / 2 + Math.PI * 2 * (1 - p.dashCooldown / maxDash),
+        );
+        g.strokePath();
+      } else {
+        g.lineStyle(2, 0x8fd3e6, 0.3 + Math.sin(time * 6) * 0.15).strokeCircle(p.x, p.y, 33);
       }
       const kick = this.recoil.life > 0;
       if (kick) {
@@ -544,6 +571,7 @@ export class ArenaRenderer {
     if (tier === 3) this.edgeFlash = 0.34;
   }
   handle(event: GameEvent) {
+    if (this.model.combo === 0) this.shownComboTier = 0;
     const color = event.color ?? 0xc6d5b0;
     if (event.type === 'shot' && event.loud && typeof event.value === 'number') {
       this.flashes.push({
@@ -631,7 +659,12 @@ export class ArenaRenderer {
         onComplete: () => t.destroy(),
       });
     }
-    if (event.type === 'kill') this.killFeedback(event);
+    if (event.type === 'kill') {
+      this.killFeedback(event);
+      const tier = this.comboTier();
+      if (tier > this.shownComboTier) this.audio.playCombo(tier);
+      this.shownComboTier = tier;
+    }
     if (event.type === 'hit') this.shake(70, 0.0022, 0);
     if (event.type === 'hurt') this.shake(130, 0.0062, 0);
     if (event.type === 'explosion') this.shake(130, 0.0035, 0);
