@@ -71,6 +71,22 @@ export class AudioEngine {
     [87.31, 110, 130.81],
     [110, 138.59, 164.81],
   ];
+  /** Landing-page piece: eight bars, two per chord, bells over a slow drone. */
+  private static readonly MENU_ROOTS = [73.42, 58.27, 49, 55];
+  private static readonly MENU_PADS = [
+    [146.83, 174.61, 220],
+    [116.54, 146.83, 174.61],
+    [98, 116.54, 146.83],
+    [110, 138.59, 164.81],
+  ];
+  private static readonly MENU_BELLS: { step: number; freq: number }[] = [
+    { step: 0, freq: 587.33 },
+    { step: 22, freq: 440 },
+    { step: 44, freq: 698.46 },
+    { step: 74, freq: 466.16 },
+    { step: 98, freq: 392 },
+    { step: 116, freq: 440 },
+  ];
   constructor() {
     const prefs = loadPrefs();
     this.musicVolume = prefs.music;
@@ -155,9 +171,55 @@ export class AudioEngine {
     this.sfxVolume = clampVolume(volume, this.sfxVolume);
     this.persist();
   }
-  /** Combat switches the loop to the denser drum-driven arrangement. */
+  /** Menu bass drone: one soft sustained note per chord. */
+  private drone(freq: number, t: number, dur: number) {
+    const ctx = this.context!;
+    const osc = ctx.createOscillator(),
+      filter = ctx.createBiquadFilter(),
+      gain = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.value = freq;
+    filter.type = 'lowpass';
+    filter.frequency.value = 260;
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.linearRampToValueAtTime(0.3, t + 0.9);
+    gain.gain.setTargetAtTime(0.0001, t + dur - 0.7, 0.3);
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.musicBus!);
+    osc.start(t);
+    osc.stop(t + dur);
+    osc.onended = () => {
+      osc.disconnect();
+      filter.disconnect();
+      gain.disconnect();
+    };
+  }
+  /** Soft bell ping with a long echo tail for the landing-page motif. */
+  private bell(freq: number, t: number) {
+    const ctx = this.context!;
+    const osc = ctx.createOscillator(),
+      gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.09, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 1.6);
+    osc.connect(gain);
+    gain.connect(this.musicBus!);
+    if (this.echo) gain.connect(this.echo);
+    osc.start(t);
+    osc.stop(t + 1.7);
+    osc.onended = () => {
+      osc.disconnect();
+      gain.disconnect();
+    };
+  }
+  /** Entering or leaving combat restarts the track: each area owns its song. */
   setCombat(combat: boolean) {
+    if (combat === this.combat) return;
     this.combat = combat;
+    this.stopMusic();
+    if (!this.musicMuted && this.context) this.startMusic();
   }
   play(event: GameEvent) {
     if (this.sfxMuted || this.sfxVolume <= 0 || !this.context || !this.bus) return;
@@ -209,40 +271,48 @@ export class AudioEngine {
   }
   private scheduleMusic() {
     if (!this.context || !this.musicBus) return;
+    const loopLen = this.combat ? 64 : 128;
     while (this.nextStepTime < this.context.currentTime + 0.15) {
       this.scheduleStep(
-        this.stepCounter % 64,
+        this.stepCounter % loopLen,
         this.nextStepTime,
-        Math.floor(this.stepCounter / 64),
+        Math.floor(this.stepCounter / loopLen),
       );
       this.stepCounter++;
       this.nextStepTime += AudioEngine.STEP;
     }
   }
   private scheduleStep(step: number, t: number, loopIndex: number) {
-    const bar = Math.floor(step / 16),
-      inBar = step % 16,
-      stepDur = AudioEngine.STEP,
+    const stepDur = AudioEngine.STEP,
       barDur = stepDur * 16;
-    // Landing page: ambient pads, soft bass and the theme every other loop.
-    // Battlefield: the full band — drums, driving bass, theme and crash each loop.
-    const note = AudioEngine.MELODY.find((n) => n.step === step);
-    if (note && (this.combat || loopIndex % 2 === 0)) this.melody(note.freq, t, note.len * stepDur);
-    if (inBar === 0) {
-      this.pad(AudioEngine.BAR_PADS[bar], t, barDur);
-      if (this.combat) this.crash(t);
-      if (this.combat && bar === 3) this.riser(t, stepDur * 16);
-    }
-    if (this.combat && inBar % 2 === 0) {
-      const root = AudioEngine.BAR_ROOTS[bar];
-      this.bass(inBar === 6 || inBar === 14 ? root * 2 : root, t, stepDur * 1.7);
-    } else if (!this.combat && inBar % 8 === 0) {
-      this.bass(AudioEngine.BAR_ROOTS[bar], t, stepDur * 6);
-    }
     if (this.combat) {
+      const bar = Math.floor(step / 16),
+        inBar = step % 16;
+      const note = AudioEngine.MELODY.find((n) => n.step === step);
+      if (note) this.melody(note.freq, t, note.len * stepDur);
+      if (inBar === 0) {
+        this.pad(AudioEngine.BAR_PADS[bar], t, barDur);
+        this.crash(t);
+        if (bar === 3) this.riser(t, barDur);
+      }
+      if (inBar % 2 === 0) {
+        const root = AudioEngine.BAR_ROOTS[bar];
+        this.bass(inBar === 6 || inBar === 14 ? root * 2 : root, t, stepDur * 1.7);
+      }
       if (inBar === 0 || inBar === 6 || inBar === 10) this.kick(t);
       if (inBar === 8) this.snare(t);
       if (inBar % 2 === 1) this.hat(t, inBar % 4 === 3 ? 0.1 : 0.055);
+    } else {
+      // Landing page: its own slow ambient piece — two-bar chords over a deep
+      // drone with a sparse bell motif, no drums.
+      const bar = Math.floor(step / 32),
+        inBar = step % 32;
+      if (inBar === 0) {
+        this.pad(AudioEngine.MENU_PADS[bar], t, barDur * 2);
+        this.drone(AudioEngine.MENU_ROOTS[bar], t, barDur * 2);
+      }
+      const bell = AudioEngine.MENU_BELLS.find((n) => n.step === step);
+      if (bell && loopIndex % 2 === 0) this.bell(bell.freq, t);
     }
   }
   private applyMusicGain() {
