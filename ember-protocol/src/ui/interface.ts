@@ -8,9 +8,11 @@ import { gunIcon, icon } from './icons';
 
 export class Interface {
   private squad = false;
+  private soundPanelOpen = false;
   private overlayKey = '';
   private weaponKey = '';
   private skillKey = '';
+  private soundKey = '';
   private notice = '';
   private noticeTimer?: number;
   private timer: number;
@@ -28,7 +30,7 @@ export class Interface {
         <header class="topbar">
           <a class="brand" href="#" data-action="home" data-i18n-aria="homeLabel" aria-label="${t('homeLabel')}"><span class="brand-mark">${icon('bolt', 27)}</span><span><span data-i18n="brandName">${t('brandName')}</span><small data-i18n="brandSubtitle">${t('brandSubtitle')}</small></span></a>
           <nav class="route" data-i18n-aria="progressLabel" aria-label="${t('progressLabel')}">${LEVELS.map((level, i) => `<div class="route-node" data-room="${i}"><span>0${i + 1}</span><div data-level-name="${i}">${this.i18n.text(level.name)}</div></div>${i < 2 ? '<i></i>' : ''}`).join('')}</nav>
-          <div class="tools"><span class="build-tag">PLAYABLE DEMO <b>0.2</b></span><button class="icon-button language-button" data-action="language" data-i18n-title="languageTitle" data-i18n-aria="languageTitle" title="${t('languageTitle')}" aria-label="${t('languageTitle')}"><span id="language-label">${this.i18n.isChinese ? 'EN' : '中文'}</span></button><button class="icon-button" data-action="sound" data-i18n-title="soundToggle" title="${t('soundToggle')}">${icon('volume')}</button><button class="icon-button" data-action="pause" data-i18n-aria="pauseGame" data-i18n-title="pauseTitle" aria-label="${t('pauseGame')}" title="${t('pauseTitle')}">${icon('pause')}</button><button class="icon-button" data-action="fullscreen" data-i18n-aria="fullscreen" data-i18n-title="fullscreen" aria-label="${t('fullscreen')}" title="${t('fullscreen')}">${icon('full')}</button></div>
+          <div class="tools"><span class="build-tag">PLAYABLE DEMO <b>0.2</b></span><button class="icon-button language-button" data-action="language" data-i18n-title="languageTitle" data-i18n-aria="languageTitle" title="${t('languageTitle')}" aria-label="${t('languageTitle')}"><span id="language-label">${this.i18n.isChinese ? 'EN' : '中文'}</span></button><button class="icon-button" data-action="sound" data-i18n-title="soundToggle" data-i18n-aria="soundToggle" title="${t('soundToggle')}" aria-label="${t('soundToggle')}">${icon('volume')}</button><div class="sound-panel" id="sound-panel"></div><button class="icon-button" data-action="pause" data-i18n-aria="pauseGame" data-i18n-title="pauseTitle" aria-label="${t('pauseGame')}" title="${t('pauseTitle')}">${icon('pause')}</button><button class="icon-button" data-action="fullscreen" data-i18n-aria="fullscreen" data-i18n-title="fullscreen" aria-label="${t('fullscreen')}" title="${t('fullscreen')}">${icon('full')}</button></div>
         </header>
         <main class="workspace">
           <section class="field-wrap">
@@ -61,6 +63,7 @@ export class Interface {
     });
     document.addEventListener('click', this.onClick);
     document.addEventListener('keydown', this.onKey);
+    document.addEventListener('input', this.onInput);
     document.addEventListener('visibilitychange', this.onVisibilityChange);
     this.unsubscribeLanguage = this.i18n.subscribe(() => this.applyLanguage());
     this.timer = window.setInterval(() => this.refresh(), 70);
@@ -72,6 +75,11 @@ export class Interface {
   };
 
   private onKey = (event: KeyboardEvent) => {
+    if (event.code === 'Escape' && this.soundPanelOpen) {
+      this.soundPanelOpen = false;
+      this.refresh();
+      return;
+    }
     if (event.code === 'Escape' || event.code === 'KeyP') {
       event.preventDefault();
       this.togglePause();
@@ -83,9 +91,32 @@ export class Interface {
     if (event.code === 'KeyL') this.i18n.toggle();
   };
 
+  private onInput = (event: Event) => {
+    const slider = event.target as HTMLElement;
+    if (!(slider instanceof HTMLInputElement) || !slider.dataset.setting) return;
+    if (this.audio.muted) {
+      this.audio.toggle();
+      this.updateSound();
+    }
+    const volume = Number(slider.value) / 100;
+    if (slider.dataset.setting === 'music') this.audio.setMusicVolume(volume);
+    if (slider.dataset.setting === 'sfx') this.audio.setSfxVolume(volume);
+    const label = document.getElementById(`${slider.dataset.setting}-value`);
+    if (label) label.textContent = `${slider.value}%`;
+  };
+
   private onClick = (event: MouseEvent) => {
+    if (
+      this.soundPanelOpen &&
+      !(event.target as HTMLElement).closest('.sound-panel, [data-action="sound"]')
+    ) {
+      this.soundPanelOpen = false;
+    }
     const button = (event.target as HTMLElement).closest<HTMLElement>('[data-action]');
-    if (!button) return;
+    if (!button) {
+      this.refresh();
+      return;
+    }
     this.audio.unlock();
     const action = button.dataset.action;
     if (action === 'start') {
@@ -103,9 +134,13 @@ export class Interface {
       this.model.phase = 'menu';
     }
     if (action === 'sound') {
+      this.soundPanelOpen = !this.soundPanelOpen;
+    }
+    if (action === 'muteAll') {
       this.audio.toggle();
       this.updateSound();
     }
+    if (action === 'testSfx') this.audio.testSfx();
     if (action === 'language') this.i18n.toggle();
     if (action === 'fullscreen') {
       if (document.fullscreenElement) void document.exitFullscreen();
@@ -267,7 +302,23 @@ export class Interface {
             .join('')
         : `<div class="empty-slots"><span>+</span><span>+</span><span>+</span><span>+</span></div><div class="empty-label">${text('emptySkill')}</div>`;
     }
+    this.renderSoundPanel();
     this.renderOverlay();
+  }
+
+  private renderSoundPanel() {
+    const panel = this.nodes['sound-panel'];
+    if (!panel) return;
+    const key = `${this.soundPanelOpen}-${this.audio.muted}-${this.i18n.locale}`;
+    if (key === this.soundKey) return;
+    this.soundKey = key;
+    if (!this.soundPanelOpen) {
+      panel.innerHTML = '';
+      return;
+    }
+    const t = (key: TranslationKey) => this.i18n.t(key);
+    const pct = (volume: number) => `${Math.round(volume * 100)}%`;
+    panel.innerHTML = `<div class="sound-panel-card"><div class="sound-panel-title">${t('soundPanelTitle')}</div><div class="sound-row"><span data-i18n="musicVolume">${t('musicVolume')}</span><b id="music-value">${pct(this.audio.musicVolume)}</b></div><input id="slider-music" type="range" min="0" max="100" step="1" value="${Math.round(this.audio.musicVolume * 100)}" data-setting="music" aria-label="${t('musicVolume')}"><div class="sound-row"><span data-i18n="sfxVolume">${t('sfxVolume')}</span><b id="sfx-value">${pct(this.audio.sfxVolume)}</b></div><div class="sound-slider-row"><input id="slider-sfx" type="range" min="0" max="100" step="1" value="${Math.round(this.audio.sfxVolume * 100)}" data-setting="sfx" aria-label="${t('sfxVolume')}"><button class="test-button" data-action="testSfx" data-i18n-title="testSfx" title="${t('testSfx')}">${icon('volume', 13)}</button></div><button class="mute-switch${this.audio.muted ? ' muted' : ''}" data-action="muteAll">${this.audio.muted ? icon('mute', 13) : icon('volume', 13)} <span data-i18n="muteAll">${t('muteAll')}</span></button></div>`;
   }
 
   private renderOverlay() {
@@ -301,6 +352,7 @@ export class Interface {
     this.unsubscribeLanguage();
     document.removeEventListener('click', this.onClick);
     document.removeEventListener('keydown', this.onKey);
+    document.removeEventListener('input', this.onInput);
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
   }
 }

@@ -139,9 +139,120 @@ button:hover {
   background: #3b4c42;
 }
 .tools {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
+}
+.sound-panel {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  z-index: 30;
+}
+.sound-panel-card {
+  width: 230px;
+  background: #16281ff5;
+  border: 1px solid #52634a66;
+  border-radius: 9px;
+  padding: 14px 15px 12px;
+  box-shadow: 0 14px 40px #050d0ab3;
+  pointer-events: auto;
+  cursor: default;
+}
+.sound-panel-title {
+  font:
+    9px Consolas,
+    'Microsoft YaHei',
+    monospace;
+  letter-spacing: 1.9px;
+  color: #a7b79c;
+  margin-bottom: 11px;
+}
+.sound-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: #aebca2;
+  margin: 9px 0 4px;
+}
+.sound-row b {
+  color: #d8cbaa;
+  font-weight: 600;
+}
+.sound-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sound-slider-row input {
+  flex: 1;
+}
+.sound-panel-card input[type='range'] {
+  width: 100%;
+  height: 14px;
+  accent-color: #efb58a;
+  cursor: pointer;
+  background: transparent;
+}
+.sound-panel-card input[type='range']::-webkit-slider-runnable-track {
+  height: 3px;
+  background: #354b38;
+  border-radius: 2px;
+}
+.sound-panel-card input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 11px;
+  height: 11px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: #efb58a;
+  box-shadow: 0 1px 4px #0008;
+}
+.test-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  background: #0e201880;
+  border: 1px solid #52634a55;
+  border-radius: 6px;
+  color: #aebca2;
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
+}
+.test-button:hover {
+  color: #efb58a;
+  border-color: #efb58a66;
+}
+.mute-switch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 12px;
+  padding: 7px 0;
+  font-size: 9.5px;
+  letter-spacing: 1px;
+  background: #0e201880;
+  border: 1px solid #52634a55;
+  border-radius: 6px;
+  color: #8a9d7e;
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
+}
+.mute-switch.muted {
+  color: #e8a1a1;
+  border-color: #8f4a4a66;
 }
 .build-tag {
   font:

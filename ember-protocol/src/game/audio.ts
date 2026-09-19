@@ -1,8 +1,39 @@
 import type { GameEvent } from './types';
 
+const STORAGE_KEY = 'ember-protocol-audio';
+
+interface AudioPrefs {
+  music: number;
+  sfx: number;
+  muted: boolean;
+}
+
+function loadPrefs(): AudioPrefs {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<AudioPrefs>;
+      return {
+        music: clampVolume(parsed.music, 0.6),
+        sfx: clampVolume(parsed.sfx, 1),
+        muted: parsed.muted === true,
+      };
+    }
+  } catch {
+    /* Storage can be unavailable in privacy modes; defaults still apply. */
+  }
+  return { music: 0.6, sfx: 1, muted: false };
+}
+
+function clampVolume(value: unknown, fallback: number): number {
+  return typeof value === 'number' && value >= 0 && value <= 1 ? value : fallback;
+}
+
 /** Small synthesized sound bank: no external assets or network dependency. */
 export class AudioEngine {
   muted = false;
+  musicVolume: number;
+  sfxVolume: number;
   private context?: AudioContext;
   private bus?: GainNode;
   private musicBus?: GainNode;
@@ -25,6 +56,12 @@ export class AudioEngine {
     [87.31, 110, 130.81],
     [98, 123.47, 146.83],
   ];
+  constructor() {
+    const prefs = loadPrefs();
+    this.musicVolume = prefs.music;
+    this.sfxVolume = prefs.sfx;
+    this.muted = prefs.muted;
+  }
   unlock() {
     try {
       this.context ??= new AudioContext();
@@ -35,7 +72,7 @@ export class AudioEngine {
       }
       if (!this.musicBus) {
         this.musicBus = this.context.createGain();
-        this.musicBus.gain.value = 0.6;
+        this.applyMusicGain();
         this.musicBus.connect(this.context.destination);
         const echo = this.context.createDelay(1);
         echo.delayTime.value = AudioEngine.STEP * 2;
@@ -65,16 +102,49 @@ export class AudioEngine {
   }
   toggle() {
     this.muted = !this.muted;
+    this.persist();
     this.unlock();
     if (this.muted) this.stopMusic();
     return this.muted;
+  }
+  setMusicVolume(volume: number) {
+    this.musicVolume = clampVolume(volume, this.musicVolume);
+    this.applyMusicGain();
+    this.persist();
+  }
+  setSfxVolume(volume: number) {
+    this.sfxVolume = clampVolume(volume, this.sfxVolume);
+    this.persist();
+  }
+  /** One gunshot through the SFX chain so the slider can be set by ear. */
+  testSfx() {
+    this.unlock();
+    if (this.sfxVolume <= 0) return;
+    const ctx = this.context;
+    if (!ctx || !this.bus) return;
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator(),
+      gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(300, t);
+    osc.frequency.exponentialRampToValueAtTime(70, t + 0.06);
+    gain.gain.setValueAtTime(0.35 * this.sfxVolume, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+    osc.connect(gain);
+    gain.connect(this.bus);
+    osc.start(t);
+    osc.stop(t + 0.06);
+    osc.onended = () => {
+      osc.disconnect();
+      gain.disconnect();
+    };
   }
   /** Combat switches the loop to the denser drum-driven arrangement. */
   setCombat(combat: boolean) {
     this.combat = combat;
   }
   play(event: GameEvent) {
-    if (this.muted || !this.context || !this.bus) return;
+    if (this.muted || this.sfxVolume <= 0 || !this.context || !this.bus) return;
     const bank: Partial<Record<GameEvent['type'], [number, number, number, OscillatorType]>> = {
       shot: [event.loud ? 190 : 300, 70, 0.06, 'sawtooth'],
       kill: [210, 95, 0.09, 'triangle'],
@@ -97,7 +167,7 @@ export class AudioEngine {
     osc.type = type;
     osc.frequency.setValueAtTime(start, t);
     osc.frequency.exponentialRampToValueAtTime(end, t + duration);
-    gain.gain.setValueAtTime(event.type === 'shot' ? 0.35 : 0.5, t);
+    gain.gain.setValueAtTime((event.type === 'shot' ? 0.35 : 0.5) * this.sfxVolume, t);
     gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
     osc.connect(gain);
     gain.connect(this.bus);
@@ -145,6 +215,22 @@ export class AudioEngine {
     const arp = this.combat ? AudioEngine.ARP_COMBAT : AudioEngine.ARP_MENUS;
     const note = AudioEngine.PENTATONIC[arp[inBar]];
     if (arp[inBar] >= 0 && (this.combat || bar % 2 === 1)) this.pluck(note, t);
+  }
+  private applyMusicGain() {
+    if (this.musicBus && this.context) {
+      const target = this.muted ? 0 : 0.6 * this.musicVolume;
+      this.musicBus.gain.setTargetAtTime(target, this.context.currentTime, 0.05);
+    }
+  }
+  private persist() {
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ music: this.musicVolume, sfx: this.sfxVolume, muted: this.muted }),
+      );
+    } catch {
+      /* Persistence is best-effort; volume still works for the session. */
+    }
   }
   private bass(freq: number, t: number, dur: number) {
     const ctx = this.context!;
