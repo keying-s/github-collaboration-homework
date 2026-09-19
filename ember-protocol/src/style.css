@@ -732,10 +732,12 @@ button:hover {
 }
 .menu-content {
   position: absolute;
-  top: 15%;
+  top: 9%;
   left: 6%;
   width: 52%;
   max-width: 480px;
+  max-height: 88%;
+  overflow-y: auto;
   pointer-events: auto;
 }
 .eyebrow {
@@ -755,11 +757,11 @@ button:hover {
   background: #cfb18a;
 }
 .menu-content h1 {
-  font-size: clamp(36px, 4vw, 65px);
+  font-size: clamp(30px, 3.4vw, 44px);
   font-weight: 800;
   line-height: 1.22;
   letter-spacing: 2px;
-  margin: 27px 0 20px;
+  margin: 18px 0 14px;
   color: #e8e7d4;
 }
 .menu-content h1 em {
@@ -770,7 +772,7 @@ button:hover {
   font-size: 11px;
   line-height: 2.1;
   color: #aebca2;
-  margin: 0 0 27px;
+  margin: 0 0 16px;
   letter-spacing: 0.5px;
 }
 .mode-switch {
@@ -781,7 +783,7 @@ button:hover {
   border: 1px solid #52634a55;
   border-radius: 7px;
   padding: 4px;
-  margin-bottom: 13px;
+  margin-bottom: 10px;
   gap: 4px;
 }
 .mode-switch button {
@@ -801,6 +803,89 @@ button:hover {
   color: #e8dcc2;
   background: #435039;
   box-shadow: 0 1px 3px #0002;
+}
+.weapon-select {
+  margin-bottom: 13px;
+}
+.weapon-select-title {
+  font:
+    9px Consolas,
+    'Microsoft YaHei',
+    monospace;
+  letter-spacing: 1.9px;
+  color: #a7b79c;
+  margin-bottom: 7px;
+}
+.weapon-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.weapon-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  background: #0e201880;
+  border: 1px solid #52634a55;
+  border-radius: 7px;
+  padding: 8px 10px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+.weapon-option:hover {
+  border-color: #7d8f6655;
+}
+.weapon-option.selected {
+  border-color: var(--gun-accent);
+  background: #35412c99;
+}
+.weapon-option-head {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.weapon-option-head h3 {
+  font-size: 12px;
+  color: #e8e7d4;
+  letter-spacing: 0.5px;
+}
+.weapon-option-head span {
+  font-size: 8px;
+  color: #839775;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+.weapon-option-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  font-size: 8.5px;
+  letter-spacing: 0.5px;
+  color: #8a9d7e;
+  width: 100%;
+}
+.weapon-option-stats b {
+  color: #d8cbaa;
+  font-weight: 600;
+  margin-left: 3px;
+}
+@media (max-width: 1100px) {
+  .weapon-options {
+    grid-template-columns: 1fr;
+  }
+  .weapon-option {
+    flex-direction: row;
+    align-items: center;
+  }
+  .weapon-option-head {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 8px;
+  }
 }
 .start-button {
   display: flex;
@@ -830,7 +915,7 @@ button:hover {
   gap: 12px;
   font-size: 9px;
   color: #839775;
-  margin-top: 18px;
+  margin-top: 12px;
 }
 .menu-meta > i {
   width: 3px;
@@ -1538,20 +1623,38 @@ kbd {
     padding: 10px 0;
   }
   .menu-content {
-    top: 12%;
+    top: 8%;
+    max-height: 92%;
   }
   .menu-content h1 {
-    font-size: clamp(36px, 3.9vw, 57px);
-    margin: 22px 0 17px;
+    font-size: clamp(30px, 3.2vw, 44px);
+    margin: 8px 0 8px;
   }
   .menu-description {
-    margin-bottom: 22px;
+    margin-bottom: 10px;
+    line-height: 1.8;
+  }
+  .mode-switch button {
+    padding: 8px 5px;
+  }
+  .weapon-select-title {
+    margin-bottom: 4px;
+  }
+  .weapon-option {
+    padding: 7px 10px;
+    gap: 4px;
+  }
+  .weapon-option-stats {
+    gap: 2px 8px;
+  }
+  .start-button {
+    padding: 12px 20px;
   }
   .menu-tip {
-    margin-top: 23px;
+    display: none;
   }
   .menu-meta {
-    margin-top: 15px;
+    margin-top: 8px;
   }
   footer {
     flex-shrink: 0;

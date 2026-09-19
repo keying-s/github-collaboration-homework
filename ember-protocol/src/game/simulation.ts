@@ -92,15 +92,15 @@ export class Simulation {
       .filter((p) => p.kind !== 'health')
       .sort((a, b) => distance(a, this.player) - distance(b, this.player))[0];
   }
-  private newPlayer(): Player {
+  private newPlayer(weapon: WeaponId = 'rifle'): Player {
     return {
       x: 640,
       y: 445,
       hp: 100,
       maxHp: 100,
       angle: -0.4,
-      weapon: 'rifle',
-      ammo: 30,
+      weapon,
+      ammo: WEAPONS[weapon].magazine,
       shotCooldown: 0,
       reloadRemaining: 0,
       dashCooldown: 0,
@@ -111,12 +111,12 @@ export class Simulation {
     };
   }
 
-  start(squad = false) {
+  start(squad = false, startingWeapon: WeaponId = 'rifle') {
     this.squad = squad;
     this.skills = [];
     this.offeredSkills = [];
-    this.inventory = ['rifle'];
-    this.player = this.newPlayer();
+    this.inventory = [startingWeapon];
+    this.player = this.newPlayer(startingWeapon);
     this.kills = 0;
     this.elapsed = 0;
     this.combo = 0;

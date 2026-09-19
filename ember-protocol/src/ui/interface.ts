@@ -2,12 +2,13 @@ import { LEVELS, SKILLS, WEAPONS } from '../game/config';
 import { distance } from '../game/math';
 import type { AudioEngine } from '../game/audio';
 import type { Simulation } from '../game/simulation';
-import type { SkillId } from '../game/types';
+import type { SkillId, Weapon, WeaponId } from '../game/types';
 import type { I18n, TranslationKey } from '../i18n';
 import { gunIcon, icon } from './icons';
 
 export class Interface {
   private squad = false;
+  private startWeapon: WeaponId = 'rifle';
   private overlayKey = '';
   private weaponKey = '';
   private skillKey = '';
@@ -89,7 +90,7 @@ export class Interface {
     this.audio.unlock();
     const action = button.dataset.action;
     if (action === 'start') {
-      this.model.start(this.squad);
+      this.model.start(this.squad, this.startWeapon);
       this.overlayKey = '';
       (document.activeElement as HTMLElement)?.blur();
     }
@@ -97,9 +98,10 @@ export class Interface {
       this.squad = action === 'squad';
       this.overlayKey = '';
     }
+    if (action === 'weapon') this.startWeapon = button.dataset.weapon as WeaponId;
     if (action === 'pause' || action === 'resume') this.togglePause();
     if (action === 'home') {
-      this.model.start(this.squad);
+      this.model.start(this.squad, this.startWeapon);
       this.model.phase = 'menu';
     }
     if (action === 'sound') {
@@ -269,10 +271,22 @@ export class Interface {
     this.renderOverlay();
   }
 
+  private weaponCard(weapon: Weapon): string {
+    const t = (key: TranslationKey) => this.i18n.t(key);
+    const stats = [
+      `${t('statDamage')} <b>${weapon.pellets > 1 ? `${weapon.damage}×${weapon.pellets}` : weapon.damage}</b>`,
+      `${t('statFireRate')} <b>${Math.round(60 / weapon.interval)} RPM</b>`,
+      `${t('statMagazine')} <b>${weapon.magazine}</b>`,
+      `${t('statReload')} <b>${weapon.reload.toFixed(2)}s</b>`,
+      `${t('statRange')} <b>${weapon.range}</b>`,
+    ];
+    return `<button class="weapon-option${weapon.id === this.startWeapon ? ' selected' : ''}" data-action="weapon" data-weapon="${weapon.id}" style="--gun-accent:#${weapon.color.toString(16).padStart(6, '0')}" aria-pressed="${weapon.id === this.startWeapon}" title="${this.i18n.text(weapon.description)}"><div class="weapon-option-body"><div class="weapon-option-head"><h3>${this.i18n.text(weapon.name)}</h3><span>${this.i18n.text(weapon.label)}</span></div><div class="weapon-option-stats">${stats.map((stat) => `<span>${stat}</span>`).join('')}</div></div></button>`;
+  }
+
   private renderOverlay() {
     const m = this.model;
     const t = (key: TranslationKey) => this.i18n.t(key);
-    const key = `${m.phase}-${m.paused}-${this.squad}-${m.skills.join()}-${this.i18n.locale}`;
+    const key = `${m.phase}-${m.paused}-${this.squad}-${this.startWeapon}-${m.skills.join()}-${this.i18n.locale}`;
     if (key === this.overlayKey) return;
     this.overlayKey = key;
     const overlay = this.nodes.overlay;
@@ -280,7 +294,13 @@ export class Interface {
     overlay.innerHTML = '';
     if (m.phase === 'menu') {
       overlay.classList.add('menu-overlay');
-      overlay.innerHTML = `<div class="menu-content"><div class="eyebrow"><span></span> ${t('menuEyebrow')}</div><h1>${t('heroLine1')}<br><em>${t('heroLine2')}</em></h1><p class="menu-description">${t('menuDescription1')}<br>${t('menuDescription2')}</p><div class="mode-switch" role="group" aria-label="${t('operationMode')}"><button data-action="solo" class="${!this.squad ? 'selected' : ''}">${icon('person', 18)} ${t('soloAction')}</button><button data-action="squad" class="${this.squad ? 'selected' : ''}">${icon('people', 19)} ${t('aiCompanion')}</button></div><button class="start-button" data-action="start"><span>${t('enterZone')}</span>${icon('arrow', 22)}</button><div class="menu-meta"><span>${t('threeAreas')}</span><i></i><span>${t('threeWeapons')}</span><i></i><span>${t('sixSkills')}</span></div><div class="menu-tip">${icon('info', 14)} ${t('desktopTip')}</div></div><div class="arena-stamp"><span>FIELD TEST</span><strong>01—03</strong><small>${t('runMotto')}</small></div>`;
+      overlay.innerHTML = `<div class="menu-content"><div class="eyebrow"><span></span> ${t('menuEyebrow')}</div><h1>${t('heroLine1')}<br><em>${t('heroLine2')}</em></h1><p class="menu-description">${t('menuDescription1')}<br>${t('menuDescription2')}</p><div class="mode-switch" role="group" aria-label="${t('operationMode')}"><button data-action="solo" class="${!this.squad ? 'selected' : ''}">${icon('person', 18)} ${t('soloAction')}</button><button data-action="squad" class="${this.squad ? 'selected' : ''}">${icon('people', 19)} ${t('aiCompanion')}</button></div><div class="weapon-select" role="group" aria-label="${t('chooseWeapon')}"><div class="weapon-select-title">${t('chooseWeapon')}</div><div class="weapon-options">${Object.values(
+        WEAPONS,
+      )
+        .map((weapon) => this.weaponCard(weapon))
+        .join(
+          '',
+        )}</div></div><button class="start-button" data-action="start"><span>${t('enterZone')}</span>${icon('arrow', 22)}</button><div class="menu-meta"><span>${t('threeAreas')}</span><i></i><span>${t('threeWeapons')}</span><i></i><span>${t('sixSkills')}</span></div><div class="menu-tip">${icon('info', 14)} ${t('desktopTip')}</div></div><div class="arena-stamp"><span>FIELD TEST</span><strong>01—03</strong><small>${t('runMotto')}</small></div>`;
     } else if (m.phase === 'upgrade') {
       overlay.classList.add('modal-overlay');
       overlay.innerHTML = `<div class="upgrade-modal"><div class="eyebrow">${t('upgradeEyebrow')}</div><h2>${t('upgradeTitle1')}<em>${t('upgradeTitle2')}</em></h2><p>${t('upgradeDescription')}</p><div class="upgrade-options">${m.options.map((skill, i) => `<button class="upgrade-option" data-action="skill" data-skill="${skill.id}"><span class="option-index">MODULE / 0${i + 1}</span><i style="color:${skill.color}">${icon(skill.icon, 34)}</i><span class="skill-tag" style="color:${skill.color}">${this.i18n.text(skill.tag)}</span><h3>${this.i18n.text(skill.name)}</h3><p>${this.i18n.text(skill.description)}</p><span class="choose-label">${t('equipModule')} ${icon('arrow', 17)}</span></button>`).join('')}</div><small>${t('upgradePaused')}</small></div>`;
