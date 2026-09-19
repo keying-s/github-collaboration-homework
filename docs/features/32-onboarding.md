@@ -90,3 +90,7 @@
 - 尚未解决的限制：训练场靶子为静止 crawler，不会还击；“结束训练”直接回菜单，未提供连续进阶靶。
 - 后续 Issue：可加“进阶靶”（移动/远程靶）、把剧情简报做成可跳过的更长过场、或把第 1 关提示扩展到后续房间。
 - 撤销 / 回退此功能时需注意的兼容点：移除 `Enemy.home` 不影响其它逻辑（仅训练使用）；`training`/`trainingDone` 默认 false/空集，对既有存档与战斗无副作用。
+
+## 修复记录（Fix log）
+
+- **Next/Prev/分页按钮点击“无反应”**：初版 `Interface.onClick` 在处理 `guideStep`（上一步/继续）与 `guideTab`（故事/操作/训练 分页）后只调用了 `refresh()`，而 `refresh()` 的刷新循环并不重绘 `#guide` 浮层，导致 `guideStep`/`guideTab` 已变更但面板 DOM 不刷新——表现就是“下一步按了没反应”。已在 `onClick` 末尾对这两类 guide 导航动作补 `renderGuide()` 显式重绘。修复后：逐章前进/返回、最后一章“继续”跳到“操作”分页、三个分页切换均实时生效。本地验证 `npx tsc --noEmit`、`npm test`(22/22)、`npm run build`、`npm run format:check` 均通过。
