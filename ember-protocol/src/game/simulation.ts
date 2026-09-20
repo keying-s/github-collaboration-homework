@@ -91,7 +91,7 @@ export class Simulation {
   get options() {
     return this.offeredUpgrades.length
       ? this.offeredUpgrades.map((id) => UPGRADES.find((u) => u.id === id)!)
-      : UPGRADES.slice(0, 2);
+      : UPGRADES.slice(0, 3);
   }
   /** Power-fantasy pass (#49): every axis pick DOUBLES the stat (2^stacks).
    * Stacking one axis and spreading picks multiply total output equally, but feel
@@ -272,7 +272,7 @@ export class Simulation {
       const j = Math.floor(this.random() * (i + 1));
       [pool[i], pool[j]] = [pool[j], pool[i]];
     }
-    this.offeredUpgrades = pool.slice(0, 2).map((u) => u.id);
+    this.offeredUpgrades = pool.slice(0, 3).map((u) => u.id);
     this.phase = 'upgrade';
   }
   drainEvents() {

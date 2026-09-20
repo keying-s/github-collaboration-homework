@@ -52,6 +52,8 @@ export interface UpgradeOption {
   id: UpgradeId;
   /** Short phrase only — the redesign bans lore sentences on combat-facing cards. */
   label: LocalizedText;
+  /** One short line stating the doubled effect for both weapons. */
+  effect: LocalizedText;
 }
 export interface Player extends Vec {
   hp: number;

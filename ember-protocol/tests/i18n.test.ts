@@ -19,6 +19,7 @@ test('every configured level, weapon and upgrade axis has Chinese and English co
   }
   for (const option of UPGRADES) {
     assertBilingual(option.label, `upgrade ${option.id} label`);
+    assertBilingual(option.effect, `upgrade ${option.id} effect`);
   }
   for (const [index, level] of LEVELS.entries()) {
     assertBilingual(level.name, `level ${index + 1} name`);

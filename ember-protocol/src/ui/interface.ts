@@ -423,7 +423,7 @@ export class Interface {
       overlay.innerHTML = `<div class="upgrade-modal"><div class="eyebrow">${t('upgradeEyebrow')}</div><h2>${t('upgradeTitle1')}<em>${t('upgradeTitle2')}</em></h2><p>${t('upgradeDescription')}</p><div class="upgrade-options">${m.options
         .map((option, i) => {
           const stacks = m.upgrades.filter((u) => u === option.id).length;
-          return `<button class="upgrade-option" data-action="upgrade" data-upgrade="${option.id}"><span class="option-index">SUPPLY / 0${i + 1}</span><i>${icon('bolt', 34)}</i><h3>${this.i18n.text(option.label)}</h3>${stacks ? `<span class="skill-tag">×${stacks}</span>` : ''}<span class="choose-label">${t('takeUpgrade')} ${icon('arrow', 17)}</span></button>`;
+          return `<button class="upgrade-option" data-action="upgrade" data-upgrade="${option.id}"><span class="option-index">SUPPLY / 0${i + 1}</span><i>${icon('bolt', 34)}</i><h3>${this.i18n.text(option.label)}</h3><p>${this.i18n.text(option.effect)}</p>${stacks ? `<span class="skill-tag">×${stacks}</span>` : ''}<span class="choose-label">${t('takeUpgrade')} ${icon('arrow', 17)}</span></button>`;
         })
         .join('')}</div><small>${t('upgradePaused')}</small></div>`;
     } else if (m.phase === 'bossSelect') {

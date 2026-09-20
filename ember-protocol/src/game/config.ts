@@ -99,11 +99,31 @@ export const WEAPONS: Record<WeaponId, Weapon> = {
   },
 };
 export const UPGRADES: UpgradeOption[] = [
-  { id: 'shots', label: { zh: '弹丸 +1', en: '+1 PROJECTILE' } },
-  { id: 'damage', label: { zh: '伤害 +20%', en: '+20% DAMAGE' } },
-  { id: 'rate', label: { zh: '射速 +15%', en: '+15% FIRE RATE' } },
-  { id: 'pierce', label: { zh: '穿透 +1', en: '+1 PIERCE' } },
-  { id: 'mag', label: { zh: '弹匣 +50%', en: '+50% MAGAZINE' } },
+  {
+    id: 'shots',
+    label: { zh: '弹丸 ×2', en: 'PROJECTILES ×2' },
+    effect: { zh: '步枪弹流翻倍 · 火焰锥角翻倍', en: 'Rifle streams ×2 · flame cone ×2' },
+  },
+  {
+    id: 'damage',
+    label: { zh: '伤害 ×2', en: 'DAMAGE ×2' },
+    effect: { zh: '每一发、每一跳都翻倍', en: 'Every bullet and burn tick hits twice as hard' },
+  },
+  {
+    id: 'rate',
+    label: { zh: '射速 ×2', en: 'FIRE RATE ×2' },
+    effect: { zh: '开火间隔减半', en: 'Fires twice as often' },
+  },
+  {
+    id: 'pierce',
+    label: { zh: '穿透 ×2', en: 'PIERCE ×2' },
+    effect: { zh: '步枪穿透翻倍 · 火焰射程翻倍', en: 'Rifle pierce ×2 · flame range ×2' },
+  },
+  {
+    id: 'mag',
+    label: { zh: '弹匣 ×2', en: 'MAGAZINE ×2' },
+    effect: { zh: '弹匣 / 油箱容量翻倍', en: 'Magazine and fuel capacity ×2' },
+  },
 ];
 export const LEVELS: Level[] = [
   {

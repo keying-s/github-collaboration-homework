@@ -136,18 +136,19 @@ test('the starting weapon choice configures the whole run and refills its own ma
   flamerRun.tick(1 / 60, { ...idle, reload: true });
   assert.ok(flamerRun.player.reloadRemaining > 0);
 });
-test('room clear auto-opens the two-axis choice without any pickup (#49)', () => {
+test('room clear auto-opens the three-axis choice without any pickup (#49)', () => {
   const m = game();
   clearRoom(m);
   m.tick(1 / 60, idle);
   assert.equal(m.phase, 'upgrade');
-  assert.equal(m.options.length, 2);
+  assert.equal(m.options.length, 3);
   const [first, second] = m.options.map((o) => o.id);
   assert.notEqual(first, second);
   // The offer stays stable until a choice is made.
+  const ids = m.options.map((o) => o.id);
   assert.deepEqual(
     m.options.map((o) => o.id),
-    [first, second],
+    ids,
   );
   m.chooseUpgrade(first);
   assert.equal(m.phase, 'exit');
@@ -349,7 +350,7 @@ test('auto-offers draw two distinct axes and the whole pool is reachable', () =>
     m.tick(1 / 60, idle);
     assert.equal(m.phase, 'upgrade');
     const first = m.options.map((o) => o.id);
-    assert.equal(first.length, 2);
+    assert.equal(first.length, 3);
     assert.notEqual(first[0], first[1]);
     first.forEach((id) => seen.add(id));
     m.chooseUpgrade(first[0]);
