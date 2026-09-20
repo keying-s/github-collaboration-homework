@@ -6,21 +6,26 @@ export interface Rect extends Vec {
   w: number;
   h: number;
 }
-export type WeaponId = 'rifle' | 'shotgun' | 'arc';
-export type SkillId = 'chain' | 'cryo' | 'pierce' | 'nova' | 'leech' | 'haste';
+export type WeaponId = 'rifle' | 'flamer';
+/** The five additive upgrade axes from the weapon-upgrade redesign spec (#24). */
+export type UpgradeId = 'shots' | 'damage' | 'rate' | 'pierce' | 'mag';
 export type EnemyKind = 'crawler' | 'spitter' | 'brute' | 'boss';
+export type BossId = 'flower' | 'zombie' | 'doll' | 'scorpion' | 'crow';
+/** Visual skin of an enemy. Purely cosmetic: behavior still comes from `kind`. */
+export type EnemySkin = 'spider' | 'bat' | 'alien';
+export type LevelTheme = 'grass' | 'hollow' | 'moon' | 'arena';
 export type KillCause = 'bullet' | 'explosion' | 'chain';
-export type Phase = 'menu' | 'combat' | 'upgrade' | 'exit' | 'won' | 'lost';
+export type Phase = 'menu' | 'combat' | 'upgrade' | 'bossSelect' | 'exit' | 'won' | 'lost';
 export type Locale = 'zh-CN' | 'en';
 export type StatusMessageKey =
   | 'stateReady'
-  | 'skillActive'
+  | 'upgradeActive'
   | 'portalReady'
   | 'runInterrupted'
   | 'waveIncoming'
   | 'finalPortal'
   | 'clearPortal'
-  | 'moduleFound';
+  | 'crateFound';
 export interface LocalizedText {
   zh: string;
   en: string;
@@ -44,13 +49,10 @@ export interface Weapon {
   reload: number;
   range: number;
 }
-export interface Skill {
-  id: SkillId;
-  name: LocalizedText;
-  tag: LocalizedText;
-  description: LocalizedText;
-  color: string;
-  icon: string;
+export interface UpgradeOption {
+  id: UpgradeId;
+  /** Short phrase only — the redesign bans lore sentences on combat-facing cards. */
+  label: LocalizedText;
 }
 export interface Player extends Vec {
   hp: number;
@@ -80,6 +82,10 @@ export interface Enemy extends Vec {
   windup: number;
   target: Vec;
   charge: number;
+  skin?: EnemySkin;
+  bossId?: BossId;
+  elite?: boolean;
+  atk?: number;
   deathHandled?: boolean;
   knock?: Vec;
   cause?: KillCause;
@@ -98,11 +104,12 @@ export interface Bullet extends Vec {
   pierce: number;
   hits: Set<number>;
   owner: 'player' | 'ally' | 'enemy';
+  /** Flame particles render as a soft cone spray instead of tracer lines. */
+  flame?: boolean;
 }
 export interface Pickup extends Vec {
   id: number;
-  kind: 'weapon' | 'health' | 'module';
-  weapon?: WeaponId;
+  kind: 'health' | 'crate';
   age: number;
 }
 export interface Barrel extends Vec {
@@ -116,7 +123,6 @@ export interface InputState {
   dash: boolean;
   reload: boolean;
   interact: boolean;
-  switchWeapon: boolean;
 }
 export interface GameEvent extends Vec {
   type:
@@ -126,7 +132,6 @@ export interface GameEvent extends Vec {
     | 'explosion'
     | 'dash'
     | 'hurt'
-    | 'chain'
     | 'pickup'
     | 'wave'
     | 'clear'
@@ -146,7 +151,21 @@ export interface Level {
   subtitle: LocalizedText;
   accent: number;
   floor: number;
+  theme: LevelTheme;
   obstacles: Rect[];
   barrels: Vec[];
-  waves: EnemyKind[][];
+  /** A trailing "!" on a wave entry marks it as an elite. */
+  waves: string[][];
+}
+/** Cosmetic + tuning profile for the final boss the player picks. */
+export interface BossConfig {
+  id: BossId;
+  glyph: string;
+  name: LocalizedText;
+  tag: LocalizedText;
+  description: LocalizedText;
+  color: number;
+  hp: number;
+  /** Bosses that hold position instead of chasing. */
+  stationary?: boolean;
 }

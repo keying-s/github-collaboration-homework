@@ -1,24 +1,29 @@
-import { LEVELS, SKILLS, WEAPONS, WORLD } from './config';
+import { BOSSES, LEVELS, UPGRADES, WEAPONS, WORLD } from './config';
 import { circleRect, clamp, distance, normalize, segmentCircle, segmentRect } from './math';
 import type {
   Barrel,
   Bullet,
+  BossId,
   Enemy,
   EnemyKind,
+  EnemySkin,
   GameEvent,
   InputState,
   KillCause,
   Phase,
   Pickup,
   Player,
-  SkillId,
+  UpgradeId,
   StatusMessage,
   Vec,
+  Weapon,
   WeaponId,
 } from './types';
 
 const RADII = { crawler: 20, spitter: 23, brute: 31, boss: 58 };
 const HP = { crawler: 48, spitter: 66, brute: 185, boss: 1250 };
+/** Visual theme of the regular enemies, ordered by level. */
+const SKINS: EnemySkin[] = ['spider', 'bat', 'alien'];
 const EMPTY_INPUT: InputState = {
   move: { x: 0, y: 0 },
   aim: { x: 800, y: 400 },
@@ -26,7 +31,6 @@ const EMPTY_INPUT: InputState = {
   dash: false,
   reload: false,
   interact: false,
-  switchWeapon: false,
 };
 
 /** Engine-independent model. All gameplay state is here; rendering never changes combat rules. */
@@ -42,8 +46,7 @@ export class Simulation {
   bullets: Bullet[] = [];
   pickups: Pickup[] = [];
   barrels: Barrel[] = [];
-  skills: SkillId[] = [];
-  inventory: WeaponId[] = ['rifle'];
+  upgrades: UpgradeId[] = [];
   events: GameEvent[] = [];
   kills = 0;
   elapsed = 0;
@@ -55,18 +58,18 @@ export class Simulation {
   training = false;
   trainingDone = new Set<string>();
   shotsFired = 0;
+  dashed = false;
   hint: StatusMessage = { key: 'stateReady' };
   waveDelay = 1.5;
-  private queue: EnemyKind[] = [];
+  /** Final-boss choice, picked in the pre-arena selection window. */
+  bossId: BossId | null = null;
+  private queue: string[] = [];
   private spawnTimer = 0;
   private nextId = 1;
-  private hitCount = 0;
   private flow: number[] = [];
   private flowTimer = 0;
-  private upgradeSource: 'field' | 'clear' = 'field';
-  private fieldModuleDropped = false;
-  private roomKills = 0;
-  private offeredSkills: SkillId[] = [];
+  offeredUpgrades: UpgradeId[] = [];
+  private flameTick = 0;
   constructor(private random: () => number = Math.random) {
     this.prepareRoom();
   }
@@ -86,11 +89,34 @@ export class Simulation {
     return this.enemies.find((e) => e.kind === 'boss' && e.hp > 0);
   }
   get options() {
-    if (this.skills.length >= 4) return [];
-    const available = SKILLS.filter((s) => !this.skills.includes(s.id));
-    return this.offeredSkills.length
-      ? this.offeredSkills.map((id) => available.find((s) => s.id === id)!).filter(Boolean)
-      : available.slice(0, 3);
+    return this.offeredUpgrades.length
+      ? this.offeredUpgrades.map((id) => UPGRADES.find((u) => u.id === id)!)
+      : UPGRADES.slice(0, 2);
+  }
+  /** Additive upgrade axes applied to the base weapon (see docs/features/24-weapon-upgrade-redesign.md):
+   * shots widen the flamer cone by an absolute step (diminishing) or add rifle streams,
+   * pierce extends flame range or lets rifle bullets pass through enemies. */
+  get stats(): Weapon {
+    const base = WEAPONS[this.player.weapon];
+    const n = (id: UpgradeId) => this.upgrades.filter((u) => u === id).length;
+    const shots = n('shots'),
+      dmg = n('damage'),
+      rate = n('rate'),
+      pierce = n('pierce'),
+      mag = n('mag');
+    const rifle = this.player.weapon === 'rifle';
+    return {
+      ...base,
+      pellets: rifle ? base.pellets + shots : base.pellets,
+      spread: rifle ? base.spread : base.spread + 0.12 * shots,
+      damage: base.damage * (1 + 0.2 * dmg),
+      interval: base.interval / (1 + 0.15 * rate),
+      range: rifle ? base.range : base.range * (1 + 0.3 * pierce),
+      magazine: Math.round(base.magazine * (1 + 0.5 * mag)),
+    };
+  }
+  get pierceCount() {
+    return this.player.weapon === 'rifle' ? this.upgrades.filter((u) => u === 'pierce').length : 0;
   }
   get nearestPickup() {
     return this.pickups
@@ -116,23 +142,24 @@ export class Simulation {
     };
   }
 
-  start(squad = false) {
+  start(squad = false, weapon: WeaponId = 'rifle') {
     this.squad = squad;
-    this.skills = [];
-    this.offeredSkills = [];
-    this.inventory = ['rifle'];
+    this.upgrades = [];
+    this.offeredUpgrades = [];
     this.training = false;
     this.trainingDone = new Set();
     this.shotsFired = 0;
+    this.dashed = false;
     this.player = this.newPlayer();
+    this.player.weapon = weapon;
     this.kills = 0;
     this.elapsed = 0;
     this.combo = 0;
     this.bestCombo = 0;
     this.damageTaken = 0;
-    this.hitCount = 0;
     this.freeze = 0;
     this.levelIndex = 0;
+    this.bossId = null;
     this.paused = false;
     this.phase = 'combat';
     this.prepareRoom();
@@ -144,10 +171,13 @@ export class Simulation {
     this.phase = 'combat';
     this.trainingDone = new Set();
     this.shotsFired = 0;
+    this.dashed = false;
     this.player.invincible = 999;
     this.barrels = [];
     this.enemies = [];
     this.queue = [];
+    // A practice crate teaches the E-interact drill that replaces weapon pickups.
+    this.pickups = [{ id: this.nextId++, x: 760, y: 445, kind: 'crate', age: 0 }];
     this.spawnTrainingDummies();
   }
   endTraining() {
@@ -203,18 +233,8 @@ export class Simulation {
     this.waveIndex = 0;
     this.waveDelay = 2.8;
     this.spawnTimer = 0;
-    this.roomKills = 0;
-    this.fieldModuleDropped = false;
     this.flowTimer = 0;
     this.hint = { key: 'stateReady' };
-    this.pickups.push({
-      id: this.nextId++,
-      x: 494,
-      y: 425,
-      kind: 'weapon',
-      weapon: this.levelIndex === 1 ? 'arc' : 'shotgun',
-      age: 0,
-    });
     this.emit('wave', this.player, { text: this.level.name });
   }
   nextLevel() {
@@ -225,19 +245,29 @@ export class Simulation {
       return;
     }
     this.levelIndex++;
-    this.phase = 'combat';
+    // Entering the arena: pause behind the boss-selection window until a nemesis is picked.
+    this.phase = this.isLastLevel ? 'bossSelect' : 'combat';
     this.prepareRoom();
   }
-  chooseSkill(id: SkillId) {
-    if (this.phase !== 'upgrade' || !this.options.some((s) => s.id === id)) return;
-    this.skills.push(id);
+  /** Confirm the final boss from the pre-arena selection window. */
+  chooseBoss(id: BossId) {
+    if (this.phase !== 'bossSelect') return;
+    this.bossId = id;
+    this.phase = 'combat';
+    this.hint = { key: 'stateReady' };
+    this.player.invincible = 1.2;
+  }
+  chooseUpgrade(id: UpgradeId) {
+    if (this.phase !== 'upgrade' || !this.options.some((o) => o.id === id)) return;
+    this.upgrades.push(id);
     this.emit('pickup', this.player, {
-      text: SKILLS.find((s) => s.id === id)!.name,
+      text: UPGRADES.find((u) => u.id === id)!.label,
       color: 0xade3b7,
     });
-    this.offeredSkills = [];
-    this.phase = this.upgradeSource === 'clear' ? 'exit' : 'combat';
-    this.hint = { key: this.phase === 'exit' ? 'portalReady' : 'skillActive' };
+    this.offeredUpgrades = [];
+    // Crates only spawn on room clear, so the run always resumes at the exit gate.
+    this.phase = 'exit';
+    this.hint = { key: 'portalReady' };
     this.player.invincible = 1.2;
   }
   drainEvents() {
@@ -293,16 +323,8 @@ export class Simulation {
       p.reloadRemaining -= dt;
       if (p.reloadRemaining <= 0) {
         p.reloadRemaining = 0;
-        p.ammo = this.weapon.magazine;
+        p.ammo = this.stats.magazine;
       }
-    }
-    if (input.switchWeapon && this.inventory.length > 1) {
-      const n = (this.inventory.indexOf(p.weapon) + 1) % this.inventory.length;
-      p.weapon = this.inventory[n];
-      if (this.training) this.trainingDone.add('switch');
-      p.ammo = this.weapon.magazine;
-      p.reloadRemaining = this.weapon.reload;
-      this.emit('reload', p);
     }
     if (input.reload) {
       this.reload();
@@ -313,11 +335,11 @@ export class Simulation {
     if (input.dash && p.dashCooldown <= 0) {
       p.dashDirection = p.moving ? move : { x: Math.cos(p.angle), y: Math.sin(p.angle) };
       p.dashRemaining = 0.17;
-      p.dashCooldown = this.skills.includes('nova') ? 1.65 : 2.2;
+      p.dashCooldown = 2.2;
       p.invincible = 0.32;
       this.emit('dash', p, { color: 0xfab583 });
       if (this.training) this.trainingDone.add('dash');
-      if (this.skills.includes('nova')) this.explode({ ...p }, 145, 65, false);
+      else this.dashed = true;
     }
     if (p.dashRemaining > 0) {
       this.move(p, p.dashDirection, 840 * dt, 17);
@@ -328,7 +350,7 @@ export class Simulation {
         this.fire(p, p.angle, p.weapon, 'player');
         if (this.training) this.trainingDone.add('shoot');
         p.ammo--;
-        p.shotCooldown = this.weapon.interval / (this.skills.includes('haste') ? 1.25 : 1);
+        p.shotCooldown = this.stats.interval;
       } else this.reload();
     }
     for (const pickup of [...this.pickups]) {
@@ -345,21 +367,17 @@ export class Simulation {
       const item = this.nearestPickup;
       if (item && distance(item, p) < 78) {
         this.pickups = this.pickups.filter((v) => v.id !== item.id);
-        if (item.kind === 'weapon' && item.weapon) {
-          p.weapon = item.weapon;
-          if (!this.inventory.includes(item.weapon)) this.inventory.push(item.weapon);
-          p.ammo = this.weapon.magazine;
-          p.reloadRemaining = 0;
-          this.emit('pickup', p, { text: this.weapon.name, color: this.weapon.color });
-          if (this.training) this.trainingDone.add('pickup');
-        } else if (item.kind === 'module') {
-          this.upgradeSource = this.phase === 'exit' ? 'clear' : 'field';
-          const available = SKILLS.filter((s) => !this.skills.includes(s.id)).map((s) => s.id);
-          for (let i = available.length - 1; i > 0; i--) {
+        if (item.kind === 'crate' && this.training) {
+          // In the training sandbox the crate only teaches the interaction; no modal.
+          this.trainingDone.add('crate');
+          this.emit('pickup', p, { color: 0xe8b46a });
+        } else if (item.kind === 'crate') {
+          const pool = [...UPGRADES];
+          for (let i = pool.length - 1; i > 0; i--) {
             const j = Math.floor(this.random() * (i + 1));
-            [available[i], available[j]] = [available[j], available[i]];
+            [pool[i], pool[j]] = [pool[j], pool[i]];
           }
-          this.offeredSkills = available.slice(0, 3);
+          this.offeredUpgrades = pool.slice(0, 2).map((u) => u.id);
           if (this.options.length) this.phase = 'upgrade';
           this.emit('pickup', p, { color: 0xa5e0bd });
         }
@@ -367,8 +385,8 @@ export class Simulation {
     }
   }
   private reload() {
-    if (this.player.reloadRemaining > 0 || this.player.ammo === this.weapon.magazine) return;
-    this.player.reloadRemaining = this.weapon.reload * (this.skills.includes('haste') ? 0.7 : 1);
+    if (this.player.reloadRemaining > 0 || this.player.ammo === this.stats.magazine) return;
+    this.player.reloadRemaining = this.weapon.reload;
     this.emit('reload', this.player);
   }
   private move(p: Vec, d: Vec, amount: number, r: number) {
@@ -398,38 +416,41 @@ export class Simulation {
     }
   }
   private fire(p: Vec, angle: number, id: WeaponId, owner: 'player' | 'ally') {
-    const w = WEAPONS[id],
-      isPlayer = owner === 'player';
+    const isPlayer = owner === 'player',
+      // The player's shots use upgrade-adjusted stats; the ally always fires a base rifle.
+      w = isPlayer ? this.stats : WEAPONS[id],
+      isFlame = id === 'flamer';
     for (let i = 0; i < w.pellets; i++) {
       const a =
         angle +
         (w.pellets > 1
           ? (i / (w.pellets - 1) - 0.5) * w.spread * 2
           : (this.random() - 0.5) * w.spread);
-      let damage = w.damage * (isPlayer ? 1 : 0.48);
-      if (isPlayer && this.skills.includes('pierce')) damage *= 1.15;
-      if (isPlayer && this.skills.includes('leech') && this.player.hp < 50) damage *= 1.3;
       this.bullets.push({
         id: this.nextId++,
         x: p.x + Math.cos(angle) * 29,
         y: p.y + Math.sin(angle) * 29,
         vx: Math.cos(a) * w.speed,
         vy: Math.sin(a) * w.speed,
-        damage,
+        damage: w.damage * (isPlayer ? 1 : 0.48),
         ttl: w.range / w.speed,
         enemy: false,
-        radius: 3,
+        radius: isFlame ? 5 : 3,
         color: isPlayer ? w.color : 0xa5e1cf,
-        pierce: isPlayer && this.skills.includes('pierce') ? 2 : 0,
+        pierce: isPlayer ? this.pierceCount : 0,
         hits: new Set(),
         owner,
+        flame: isFlame,
       });
     }
-    this.emit(
-      'shot',
-      { x: p.x + Math.cos(angle) * 30, y: p.y + Math.sin(angle) * 30 },
-      { color: isPlayer ? w.color : 0x99ccbe, value: angle, loud: isPlayer },
-    );
+    // The flamer fires ~20 particles per second; throttle its feedback events so
+    // audio and particles mark the sustained stream, not every single particle.
+    if (!isFlame || this.flameTick++ % 8 === 0)
+      this.emit(
+        'shot',
+        { x: p.x + Math.cos(angle) * 30, y: p.y + Math.sin(angle) * 30 },
+        { color: isPlayer ? w.color : 0x99ccbe, value: angle, loud: isPlayer && !isFlame },
+      );
     if (isPlayer) this.shotsFired++;
   }
   private updateAlly(dt: number) {
@@ -481,8 +502,8 @@ export class Simulation {
       this.bullets = [];
       this.phase = 'exit';
       this.hint = { key: this.isLastLevel ? 'finalPortal' : 'clearPortal' };
-      if (!this.isLastLevel && this.options.length)
-        this.pickups.push({ id: this.nextId++, x: 640, y: 365, kind: 'module', age: 0 });
+      if (!this.isLastLevel && this.upgrades.length < 5)
+        this.pickups.push({ id: this.nextId++, x: 640, y: 365, kind: 'crate', age: 0 });
       this.emit(
         'clear',
         { x: 640, y: 365 },
@@ -492,7 +513,7 @@ export class Simulation {
       );
     }
   }
-  private spawn(kind: EnemyKind) {
+  private spawn(token: string) {
     const points = [
       { x: 135, y: 160 },
       { x: 640, y: 115 },
@@ -503,15 +524,23 @@ export class Simulation {
     ];
     let p = points[Math.floor(this.random() * points.length)];
     if (distance(p, this.player) < 270) p = points[(points.indexOf(p) + 3) % points.length];
-    if (kind === 'boss') p = { x: 640, y: 190 };
-    const hp = HP[kind] * (this.squad ? 1.2 : 1);
+    if (token.startsWith('boss')) p = { x: 640, y: 190 };
+    this.spawnAt(p, token);
+  }
+  /** Shared enemy factory. A trailing "!" on the token marks an elite variant. */
+  private spawnAt(p: Vec, token: string, forcedSkin?: EnemySkin) {
+    const elite = token.endsWith('!');
+    const kind = token.replace(/!$/, '') as EnemyKind;
+    const bossCfg =
+      kind === 'boss' ? BOSSES.find((b) => b.id === (this.bossId ?? 'flower'))! : null;
+    const hp = (bossCfg ? bossCfg.hp : HP[kind]) * (this.squad ? 1.2 : 1) * (elite ? 4 : 1);
     this.enemies.push({
       ...p,
       id: this.nextId++,
       kind,
       hp,
       maxHp: hp,
-      radius: RADII[kind],
+      radius: RADII[kind] * (elite ? 1.35 : 1),
       angle: 0,
       cooldown: 1.1 + this.random(),
       slow: 0,
@@ -520,7 +549,127 @@ export class Simulation {
       windup: 0,
       target: { ...this.player },
       charge: 0,
+      skin:
+        forcedSkin ??
+        (kind === 'boss'
+          ? undefined
+          : this.levelIndex < 3
+            ? SKINS[this.levelIndex]
+            : SKINS[Math.floor(this.random() * SKINS.length)]),
+      bossId: bossCfg?.id,
+      elite,
+      atk: 0,
     });
+  }
+  /** Bosses call reinforcements. Capped so swarms stay readable. */
+  private summon(from: Vec, count: number, kind: EnemyKind, skin: EnemySkin) {
+    const alive = this.enemies.filter((e) => e.hp > 0).length;
+    const n = Math.min(count, Math.max(0, 9 - alive));
+    for (let i = 0; i < n; i++) {
+      const a = (i / Math.max(1, n)) * Math.PI * 2 + this.random();
+      const p = {
+        x: clamp(from.x + Math.cos(a) * 95, 110, 1170),
+        y: clamp(from.y + Math.sin(a) * 95, 120, 690),
+      };
+      if (this.level.obstacles.some((b) => circleRect(p, 22, b))) continue;
+      const hp = HP[kind] * 0.8;
+      this.enemies.push({
+        ...p,
+        id: this.nextId++,
+        kind,
+        hp,
+        maxHp: hp,
+        radius: RADII[kind],
+        angle: 0,
+        cooldown: 1.1,
+        slow: 0,
+        flash: 0,
+        age: 0,
+        windup: 0,
+        target: { ...this.player },
+        charge: 0,
+        skin,
+        atk: 0,
+      });
+      this.emit('wave', p, { text: undefined });
+    }
+  }
+  /** Doll boss: blink to a flank around the player, clear of cover. */
+  private bossBlink(e: Enemy) {
+    for (let tries = 0; tries < 8; tries++) {
+      const a = this.random() * Math.PI * 2,
+        d = 210 + this.random() * 90;
+      const p = {
+        x: clamp(this.player.x + Math.cos(a) * d, 110, 1170),
+        y: clamp(this.player.y + Math.sin(a) * d, 120, 690),
+      };
+      if (!this.level.obstacles.some((b) => circleRect(p, e.radius, b))) {
+        e.x = p.x;
+        e.y = p.y;
+        this.emit('dash', e, { color: 0xe6c9d8 });
+        return;
+      }
+    }
+  }
+  private enemyFan(
+    e: Enemy,
+    count: number,
+    spread: number,
+    speed: number,
+    damage = 10,
+    radius = 6,
+    color = 0xf19bac,
+  ) {
+    for (let i = 0; i < count; i++)
+      this.enemyBullet(
+        e,
+        e.angle + (count > 1 ? (i / (count - 1) - 0.5) * spread * 2 : 0),
+        speed,
+        damage,
+        radius,
+        color,
+      );
+  }
+  private enemyRadial(e: Enemy, count: number, speed: number) {
+    for (let i = 0; i < count; i++)
+      this.enemyBullet(e, (i / count) * Math.PI * 2 + e.age * 0.3, speed);
+    this.emit('explosion', e, { color: 0xe89aaa, value: 65 });
+  }
+  /** Per-boss attack scripts, executed when the windup finishes. */
+  private bossAttack(e: Enemy) {
+    const phase2 = e.hp < e.maxHp / 2;
+    e.atk = (e.atk ?? 0) + 1;
+    switch (e.bossId) {
+      case 'zombie':
+        this.summon(e, phase2 ? 3 : 2, 'crawler', 'spider');
+        if (phase2) this.enemyFan(e, 6, 0.55, 225);
+        e.cooldown = phase2 ? 1.9 : 2.6;
+        break;
+      case 'doll':
+        this.bossBlink(e);
+        this.enemyFan(e, phase2 ? 9 : 6, phase2 ? 0.5 : 0.35, 265, 9, 4, 0xe8d8e2);
+        e.cooldown = phase2 ? 1.5 : 2.2;
+        break;
+      case 'scorpion':
+        if (e.atk % 2 === 1) {
+          e.charge = 0.55;
+          this.emit('dash', e, { color: 0xc4cfe0 });
+        } else this.enemyFan(e, 5, 0.4, 240);
+        if (phase2 && e.atk % 3 === 0) this.enemyRadial(e, 14, 190);
+        e.cooldown = phase2 ? 1.8 : 2.4;
+        break;
+      case 'crow':
+        this.summon(e, phase2 ? 3 : 2, 'crawler', 'bat');
+        this.enemyFan(e, phase2 ? 8 : 5, 0.9, 205);
+        e.cooldown = phase2 ? 1.7 : 2.5;
+        break;
+      case 'flower':
+      default:
+        if (e.atk % 3 === 0) this.summon(e, 2, 'crawler', 'spider');
+        if (e.atk % 2 === 0 || phase2) this.enemyRadial(e, phase2 ? 18 : 12, phase2 ? 195 : 165);
+        else this.enemyFan(e, 5, 0.5, 210);
+        e.cooldown = phase2 ? 1.7 : 2.4;
+    }
   }
   private updateEnemies(dt: number) {
     for (const e of this.enemies) {
@@ -569,14 +718,7 @@ export class Simulation {
             e.charge = 0.5;
             this.emit('dash', e, { color: 0xe7a396 });
           }
-          if (e.kind === 'boss') {
-            const phase = e.hp < e.maxHp / 2;
-            const count = phase ? 18 : 12;
-            for (let i = 0; i < count; i++)
-              this.enemyBullet(e, (i / count) * Math.PI * 2 + e.age * 0.3, phase ? 195 : 165);
-            e.cooldown = phase ? 1.6 : 2.5;
-            this.emit('explosion', e, { color: 0xe89aaa, value: 65 });
-          }
+          if (e.kind === 'boss') this.bossAttack(e);
         }
       } else if (e.charge > 0) {
         this.enemyMove(e, normalize({ x: e.target.x - e.x, y: e.target.y - e.y }), 470, dt);
@@ -600,14 +742,18 @@ export class Simulation {
         if (e.cooldown <= 0 && d < 450 && this.lineClear(e, this.player)) {
           e.windup = 0.85;
           e.target = { ...this.player };
-          e.cooldown = 3.6;
+          e.cooldown = e.elite ? 2.3 : 3.6;
         } else this.enemyMove(e, this.directionTo(e, this.player), 62 * slow, dt);
       } else if (e.kind === 'boss') {
         if (e.cooldown <= 0) {
           e.windup = 1.0;
           e.target = { ...this.player };
         }
-        if (d > 220) this.enemyMove(e, this.directionTo(e, this.player), 26 * slow, dt);
+        const stationary = e.bossId === 'flower';
+        const enraged = e.bossId === 'zombie' && e.hp < e.maxHp / 2;
+        const speed = (e.bossId === 'crow' ? 38 : 26) * (enraged ? 1.8 : 1);
+        if (!stationary && d > 220)
+          this.enemyMove(e, this.directionTo(e, this.player), speed * slow, dt);
       } else
         this.move(
           e,
@@ -637,18 +783,25 @@ export class Simulation {
       }
     }
   }
-  private enemyBullet(e: Enemy, a: number, speed: number) {
+  private enemyBullet(
+    e: Enemy,
+    a: number,
+    speed: number,
+    damage = 10,
+    radius = 6,
+    color = 0xf19bac,
+  ) {
     this.bullets.push({
       id: this.nextId++,
       x: e.x + Math.cos(a) * (e.radius + 8),
       y: e.y + Math.sin(a) * (e.radius + 8),
       vx: Math.cos(a) * speed,
       vy: Math.sin(a) * speed,
-      damage: 10,
+      damage,
       ttl: 5,
       enemy: true,
-      radius: 6,
-      color: 0xf19bac,
+      radius,
+      color,
       pierce: 0,
       hits: new Set(),
       owner: 'enemy',
@@ -694,24 +847,6 @@ export class Simulation {
         b.hits.add(e.id);
         this.damageEnemy(e, b.damage, b.color);
         this.knockback(e, b.vx, b.vy, 190);
-        if (b.owner === 'player') {
-          if (this.skills.includes('cryo')) e.slow = 1.8;
-          this.hitCount++;
-          if (this.skills.includes('chain') && this.hitCount % 3 === 0) {
-            let source: Vec = e;
-            const hit = new Set([e.id]);
-            for (let j = 0; j < 2; j++) {
-              const t = this.enemies
-                .filter((v) => v.hp > 0 && !hit.has(v.id) && distance(source, v) < 210)
-                .sort((a, c) => distance(source, a) - distance(source, c))[0];
-              if (!t) break;
-              this.emit('chain', source, { target: { x: t.x, y: t.y }, color: 0xb3eaf2 });
-              this.damageEnemy(t, 24, 0xb3eaf2, 'chain');
-              hit.add(t.id);
-              source = t;
-            }
-          }
-        }
         if (b.pierce <= 0) {
           b.ttl = 0;
           break;
@@ -776,7 +911,6 @@ export class Simulation {
       }
       e.deathHandled = true;
       this.kills++;
-      this.roomKills++;
       this.combo++;
       this.comboTime = 3.2;
       this.bestCombo = Math.max(this.bestCombo, this.combo);
@@ -789,24 +923,13 @@ export class Simulation {
       });
       // Heavy kills stop the world longer; regular kills only flinch.
       this.freeze = Math.max(this.freeze, e.kind === 'brute' || e.kind === 'boss' ? 0.09 : 0.045);
-      if (this.skills.includes('leech'))
-        this.player.hp = Math.min(this.player.maxHp, this.player.hp + 3);
+      // Elite bats split into a pair of screechers when killed.
+      if (e.elite && e.skin === 'bat' && !this.training) {
+        this.spawnAt({ x: clamp(e.x - 26, 100, 1180), y: e.y }, 'crawler', 'bat');
+        this.spawnAt({ x: clamp(e.x + 26, 100, 1180), y: e.y }, 'crawler', 'bat');
+      }
       if (this.random() < 0.16)
         this.pickups.push({ id: this.nextId++, x: e.x, y: e.y, kind: 'health', age: 0 });
-      if (this.levelIndex < 2 && this.roomKills >= 5 && !this.fieldModuleDropped) {
-        this.fieldModuleDropped = true;
-        this.pickups.push({ id: this.nextId++, x: e.x, y: e.y, kind: 'module', age: 0 });
-        this.hint = { key: 'moduleFound' };
-      }
-      if (this.levelIndex === 1 && this.roomKills === 4)
-        this.pickups.push({
-          id: this.nextId++,
-          x: e.x,
-          y: e.y,
-          kind: 'weapon',
-          weapon: 'arc',
-          age: 0,
-        });
     }
     const old = this.enemies.length;
     this.enemies = this.enemies.filter((e) => e.hp > 0);
