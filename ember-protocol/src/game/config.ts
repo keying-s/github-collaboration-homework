@@ -1,4 +1,4 @@
-import type { BossConfig, Level, Skill, Weapon, WeaponId } from './types';
+import type { BossConfig, Level, UpgradeOption, Weapon, WeaponId } from './types';
 
 /** Selectable final bosses. Cards are shuffled before every choice. */
 export const BOSSES: BossConfig[] = [
@@ -98,73 +98,12 @@ export const WEAPONS: Record<WeaponId, Weapon> = {
     range: 230,
   },
 };
-export const SKILLS: Skill[] = [
-  {
-    id: 'chain',
-    name: { zh: '连锁电弧', en: 'CHAIN ARC' },
-    tag: { zh: '连锁 / 群体伤害', en: 'CHAIN / CROWD DAMAGE' },
-    description: {
-      zh: '每 3 次命中释放电弧，跳向附近 2 个敌人。霰弹命中也能触发。',
-      en: 'Every third hit arcs to 2 nearby enemies. Shotgun pellets can trigger it.',
-    },
-    color: '#9ed6d7',
-    icon: 'bolt',
-  },
-  {
-    id: 'cryo',
-    name: { zh: '霜冻弹芯', en: 'CRYO CORE' },
-    tag: { zh: '控制 / 安全空间', en: 'CONTROL / SAFE SPACE' },
-    description: {
-      zh: '子弹使敌人减速 45%。拉开距离，让追击者变成活靶。',
-      en: 'Shots slow enemies by 45%. Create distance and turn pursuers into targets.',
-    },
-    color: '#b5daef',
-    icon: 'snow',
-  },
-  {
-    id: 'pierce',
-    name: { zh: '贯穿弹道', en: 'PIERCING TRAJECTORY' },
-    tag: { zh: '穿透 / 火力效率', en: 'PIERCE / FIREPOWER EFFICIENCY' },
-    description: {
-      zh: '子弹额外穿透 2 个敌人，伤害提高 15%。在狭窄通道尤其有效。',
-      en: 'Shots pierce 2 additional enemies and deal 15% more damage. Excels in corridors.',
-    },
-    color: '#d7bcf5',
-    icon: 'arrow',
-  },
-  {
-    id: 'nova',
-    name: { zh: '闪避新星', en: 'DASH NOVA' },
-    tag: { zh: '机动 / 爆发', en: 'MOBILITY / BURST' },
-    description: {
-      zh: '冲刺起点引发范围爆破，造成 65 点伤害。冲刺冷却缩短 25%。',
-      en: 'Dashing detonates a 65-damage nova at the start and reduces dash cooldown by 25%.',
-    },
-    color: '#f6be91',
-    icon: 'sun',
-  },
-  {
-    id: 'leech',
-    name: { zh: '战地修复', en: 'FIELD REPAIR' },
-    tag: { zh: '续航 / 反击', en: 'SUSTAIN / COUNTERATTACK' },
-    description: {
-      zh: '每击败一个敌人恢复 3 点生命。生命低于一半时伤害提高 30%。',
-      en: 'Restore 3 health per kill. Deal 30% more damage while below half health.',
-    },
-    color: '#b6ddae',
-    icon: 'plus',
-  },
-  {
-    id: 'haste',
-    name: { zh: '过载机匣', en: 'OVERDRIVE MAG' },
-    tag: { zh: '射速 / 节奏', en: 'FIRE RATE / TEMPO' },
-    description: {
-      zh: '射速提高 25%，换弹加快 30%。把持续火力变成你的优势。',
-      en: 'Fire 25% faster and reload 30% faster. Turn sustained fire into an advantage.',
-    },
-    color: '#efce80',
-    icon: 'fast',
-  },
+export const UPGRADES: UpgradeOption[] = [
+  { id: 'shots', label: { zh: '弹丸 +1', en: '+1 PROJECTILE' } },
+  { id: 'damage', label: { zh: '伤害 +20%', en: '+20% DAMAGE' } },
+  { id: 'rate', label: { zh: '射速 +15%', en: '+15% FIRE RATE' } },
+  { id: 'pierce', label: { zh: '穿透 +1', en: '+1 PIERCE' } },
+  { id: 'mag', label: { zh: '弹匣 +50%', en: '+50% MAGAZINE' } },
 ];
 export const LEVELS: Level[] = [
   {

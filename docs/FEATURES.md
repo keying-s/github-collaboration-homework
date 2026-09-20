@@ -14,6 +14,7 @@
 | 开局二选一武器（焚化者喷火枪 / 游骑兵步枪），删除局内捡枪与 Q 切枪 | keying-s | [#26](https://github.com/keying-s/github-collaboration-homework/issues/26) | 开发中（重构②，规格见 [#24](https://github.com/keying-s/github-collaboration-homework/issues/24) 设计文档） |
 | 击杀手感强化：命中定格、击退、按死因的尸体动画、镜头震动、枪口火光、连击反馈 | fredericsetievi | [#27](https://github.com/keying-s/github-collaboration-homework/pull/27) · [#21](https://github.com/keying-s/github-collaboration-homework/issues/21) | 已合并（09-19） |
 | 音效补全与闪避可读性：命中 / 连击 / 低血量音效 + 闪避就绪环 | fredericsetievi | [#31](https://github.com/keying-s/github-collaboration-homework/pull/31) · [#29](https://github.com/keying-s/github-collaboration-homework/issues/29) | 已合并（09-20） |
+| 五轴道具箱二选一：删除 6 技能系统，每清一间开箱二选一加法型强化（弹丸/伤害/射速/穿透/弹匣），双枪差异化映射 | keying-s | [#39](https://github.com/keying-s/github-collaboration-homework/issues/39) | 待评审（重构③，PR 随本分支创建） |
 | 上手引导与可重看指南：分章剧情简报（中/英切换）、顶栏指南按钮、安全训练场（开火/切换/闪避/拾取要点）、第 1 关情境提示 | fredericsetievi | [#33](https://github.com/keying-s/github-collaboration-homework/pull/33) · [#32](https://github.com/keying-s/github-collaboration-homework/issues/32) | 已合并（09-20） |
 
 xmy-lab 目前在 `ember-protocol/` 上暂无功能提交；其历史内容为 `class-strike/` 原型与 `team-notes.md` 协作演练。

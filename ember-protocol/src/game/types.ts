@@ -7,7 +7,8 @@ export interface Rect extends Vec {
   h: number;
 }
 export type WeaponId = 'rifle' | 'flamer';
-export type SkillId = 'chain' | 'cryo' | 'pierce' | 'nova' | 'leech' | 'haste';
+/** The five additive upgrade axes from the weapon-upgrade redesign spec (#24). */
+export type UpgradeId = 'shots' | 'damage' | 'rate' | 'pierce' | 'mag';
 export type EnemyKind = 'crawler' | 'spitter' | 'brute' | 'boss';
 export type BossId = 'flower' | 'zombie' | 'doll' | 'scorpion' | 'crow';
 /** Visual skin of an enemy. Purely cosmetic: behavior still comes from `kind`. */
@@ -18,13 +19,13 @@ export type Phase = 'menu' | 'combat' | 'upgrade' | 'bossSelect' | 'exit' | 'won
 export type Locale = 'zh-CN' | 'en';
 export type StatusMessageKey =
   | 'stateReady'
-  | 'skillActive'
+  | 'upgradeActive'
   | 'portalReady'
   | 'runInterrupted'
   | 'waveIncoming'
   | 'finalPortal'
   | 'clearPortal'
-  | 'moduleFound';
+  | 'crateFound';
 export interface LocalizedText {
   zh: string;
   en: string;
@@ -48,13 +49,10 @@ export interface Weapon {
   reload: number;
   range: number;
 }
-export interface Skill {
-  id: SkillId;
-  name: LocalizedText;
-  tag: LocalizedText;
-  description: LocalizedText;
-  color: string;
-  icon: string;
+export interface UpgradeOption {
+  id: UpgradeId;
+  /** Short phrase only — the redesign bans lore sentences on combat-facing cards. */
+  label: LocalizedText;
 }
 export interface Player extends Vec {
   hp: number;
@@ -111,7 +109,7 @@ export interface Bullet extends Vec {
 }
 export interface Pickup extends Vec {
   id: number;
-  kind: 'health' | 'module';
+  kind: 'health' | 'crate';
   age: number;
 }
 export interface Barrel extends Vec {
@@ -134,7 +132,6 @@ export interface GameEvent extends Vec {
     | 'explosion'
     | 'dash'
     | 'hurt'
-    | 'chain'
     | 'pickup'
     | 'wave'
     | 'clear'

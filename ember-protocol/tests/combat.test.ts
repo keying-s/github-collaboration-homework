@@ -129,51 +129,56 @@ test('the starting weapon choice configures the whole run and refills its own ma
   flamerRun.tick(1 / 60, { ...idle, reload: true });
   assert.ok(flamerRun.player.reloadRemaining > 0);
 });
-test('module pickup freezes combat; choice applies once and resumes combat', () => {
+test('crate opening freezes combat; the choice applies once and resumes at the exit gate', () => {
   const m = game();
-  m.pickups = [{ id: 100, x: m.player.x, y: m.player.y, kind: 'module', age: 0 }];
+  m.phase = 'exit';
+  m.pickups = [{ id: 100, x: m.player.x, y: m.player.y, kind: 'crate', age: 0 }];
   m.tick(1 / 60, { ...idle, interact: true });
   assert.equal(m.phase, 'upgrade');
-  const chosen = m.options[0].id;
-  m.chooseSkill(chosen);
-  assert.equal(m.phase, 'combat');
-  assert.deepEqual(m.skills, [chosen]);
-  m.chooseSkill(chosen);
-  assert.equal(m.skills.length, 1);
+  assert.equal(m.options.length, 2);
+  const [first, second] = m.options.map((o) => o.id);
+  assert.notEqual(first, second);
+  // The offer stays stable until a choice is made.
+  assert.deepEqual(
+    m.options.map((o) => o.id),
+    [first, second],
+  );
+  m.chooseUpgrade(first);
+  assert.equal(m.phase, 'exit');
+  assert.deepEqual(m.upgrades, [first]);
+  m.chooseUpgrade(first);
+  assert.equal(m.upgrades.length, 1);
 });
-test('cryo slows enemies and pierce hits multiple aligned targets', () => {
+test('upgrade axes stack additively and map per weapon (spec #24)', () => {
   const m = game();
-  m.skills = ['cryo', 'pierce'];
+  // rifle: shots add parallel streams, pierce lets bullets pass through enemies
+  m.upgrades = ['shots', 'shots', 'damage', 'rate', 'pierce', 'mag'];
+  const rifle = m.stats;
+  assert.equal(rifle.pellets, WEAPONS.rifle.pellets + 2);
+  assert.ok(Math.abs(rifle.damage - WEAPONS.rifle.damage * 1.2) < 1e-9);
+  assert.ok(Math.abs(rifle.interval - WEAPONS.rifle.interval / 1.15) < 1e-9);
+  assert.equal(rifle.magazine, Math.round(WEAPONS.rifle.magazine * 1.5));
+  assert.equal(m.pierceCount, 1);
+  // flamer: shots widen the cone by absolute steps, pierce extends range, never bullet-pierce
+  const flamerRun = new Simulation(seededRandom(5));
+  flamerRun.start(false, 'flamer');
+  flamerRun.upgrades = ['shots', 'shots', 'pierce'];
+  const flamer = flamerRun.stats;
+  assert.ok(Math.abs(flamer.spread - (WEAPONS.flamer.spread + 0.24)) < 1e-9);
+  assert.ok(Math.abs(flamer.range - WEAPONS.flamer.range * 1.3) < 1e-9);
+  assert.equal(flamerRun.pierceCount, 0);
+  assert.equal(flamer.pellets, WEAPONS.flamer.pellets);
+});
+test('rifle pierce upgrades let one bullet hit aligned targets', () => {
+  const m = game();
+  m.upgrades = ['pierce'];
   const a = enemy(725),
     b = enemy(800);
   b.id = 901;
   m.enemies = [a, b];
   m.tick(1 / 60, { ...idle, firing: true });
   step(m, 0.24);
-  assert.ok(a.hp < 500 && b.hp < 500);
-  assert.ok(a.slow > 0 && b.slow > 0);
-});
-test('every third player hit chains to nearby enemies', () => {
-  const m = game();
-  m.skills = ['chain'];
-  m.enemies = [enemy(740), { ...enemy(780, 510), id: 901 }];
-  step(m, 0.42, { firing: true });
-  assert.ok(m.drainEvents().some((e) => e.type === 'chain'));
-});
-test('nova gives dash area damage, leech heals on a kill, haste accelerates reload', () => {
-  const m = game();
-  m.skills = ['nova', 'leech', 'haste'];
-  m.player.hp = 60;
-  const e = enemy(710);
-  e.hp = 20;
-  m.enemies = [e];
-  m.tick(1 / 60, { ...idle, dash: true, move: { x: -1, y: 0 } });
-  assert.equal(m.kills, 1);
-  assert.equal(m.player.hp, 63);
-  assert.equal(m.player.dashCooldown, 1.65);
-  m.player.ammo = 1;
-  m.tick(1 / 60, { ...idle, reload: true });
-  assert.ok(m.player.reloadRemaining < WEAPONS.rifle.reload);
+  assert.ok(a.hp < 500 && b.hp < 500, 'both aligned targets must take damage');
 });
 test('explosive barrels damage enemies and chain to adjacent barrels', () => {
   const m = game();
@@ -189,7 +194,7 @@ test('explosive barrels damage enemies and chain to adjacent barrels', () => {
 });
 test('new rooms refill health, ammunition and dash while retaining chosen build', () => {
   const m = game();
-  m.skills = ['chain'];
+  m.upgrades = ['damage'];
   m.player.weapon = 'flamer';
   m.player.hp = 12;
   m.player.ammo = 1;
@@ -200,7 +205,7 @@ test('new rooms refill health, ammunition and dash while retaining chosen build'
   assert.equal(m.player.hp, 100);
   assert.equal(m.player.ammo, WEAPONS.flamer.magazine);
   assert.equal(m.player.dashCooldown, 0);
-  assert.deepEqual(m.skills, ['chain']);
+  assert.deepEqual(m.upgrades, ['damage']);
 });
 test('AI partner fires at visible enemies; defeat is final until restart', () => {
   const m = game();
@@ -228,7 +233,7 @@ test('all six waves, boss, modules and exits form a complete three-room campaign
     roomExits = 0;
   for (let frame = 0; frame < 60 * 360 && m.phase !== 'won'; frame++) {
     if (m.phase === 'upgrade') {
-      m.chooseSkill(m.options[0].id);
+      m.chooseUpgrade(m.options[0].id);
       m.player.x = 640;
       m.player.y = 445;
       continue;
@@ -237,10 +242,10 @@ test('all six waves, boss, modules and exits form a complete three-room campaign
       m.chooseBoss('flower');
       continue;
     }
-    const module = m.pickups.find((p) => p.kind === 'module');
-    if (module && m.skills.length < 4) {
-      m.player.x = module.x;
-      m.player.y = module.y;
+    const crate = m.pickups.find((p) => p.kind === 'crate');
+    if (crate) {
+      m.player.x = crate.x;
+      m.player.y = crate.y;
       m.tick(1 / 60, { ...idle, interact: true });
       continue;
     }
@@ -266,7 +271,8 @@ test('all six waves, boss, modules and exits form a complete three-room campaign
   assert.equal(reachedBoss, true);
   // Elites split and bosses summon reinforcements, so the floor is the wave total.
   assert.ok(m.kills >= 57, `expected at least 57 kills, got ${m.kills}`);
-  assert.equal(m.skills.length, 4);
+  // Four rooms currently: crates spawn after rooms 1-3 (cap 5, spec #24).
+  assert.equal(m.upgrades.length, 3);
 });
 
 test('every room keeps the spawn, module drop and portal clear of cover and reachable', () => {
@@ -338,25 +344,24 @@ test('contact enemies remain outside the muzzle and can be shot at point-blank r
   assert.equal(m.kills, 1);
 });
 
-test('random module drafts can offer all six skills, stay stable and never repeat owned skills', () => {
+test('crate drafts offer two distinct axes and the whole pool is reachable', () => {
   const seen = new Set<string>();
   for (let seed = 1; seed <= 30; seed++) {
     const m = new Simulation(seededRandom(seed));
     m.start();
     m.waveDelay = 100;
-    m.pickups = [{ id: 99, x: m.player.x, y: m.player.y, kind: 'module', age: 0 }];
+    m.phase = 'exit';
+    m.pickups = [{ id: 99, x: m.player.x, y: m.player.y, kind: 'crate', age: 0 }];
     m.tick(1 / 60, { ...idle, interact: true });
-    const first = m.options.map((s) => s.id);
-    assert.equal(first.length, 3);
-    assert.deepEqual(
-      m.options.map((s) => s.id),
-      first,
-    );
+    const first = m.options.map((o) => o.id);
+    assert.equal(first.length, 2);
+    assert.notEqual(first[0], first[1]);
     first.forEach((id) => seen.add(id));
-    m.chooseSkill(first[0]);
-    assert.ok(!m.options.some((s) => s.id === first[0]));
+    m.chooseUpgrade(first[0]);
+    assert.equal(m.offeredUpgrades.length, 0);
   }
-  assert.equal(seen.size, 6);
+  // Every axis shows up across seeds, so no axis can be starved by RNG.
+  assert.equal(seen.size, 5);
 });
 
 test('knockback pushes hit enemies back without wedging them into cover', () => {
