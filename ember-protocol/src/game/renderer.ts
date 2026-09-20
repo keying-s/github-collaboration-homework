@@ -285,28 +285,17 @@ export class ArenaRenderer {
     }
     for (const p of m.pickups) {
       const y = p.y + Math.sin(time * 2.6 + p.id) * 4,
-        color =
-          p.kind === 'module'
-            ? 0xa5d6bc
-            : p.kind === 'health'
-              ? 0xb7e699
-              : WEAPONS[p.weapon!].color;
+        color = p.kind === 'module' ? 0xa5d6bc : 0xb7e699;
       g.fillStyle(color, 0.035).fillCircle(p.x, p.y, 44);
       g.fillStyle(color, 0.07).fillCircle(p.x, p.y, 30);
       g.lineStyle(1, color, 0.4).strokeEllipse(p.x, p.y + 15, 48, 19);
-      if (p.kind === 'weapon') {
-        g.save().translateCanvas(p.x, y).rotateCanvas(-0.35);
-        this.drawGun(g, p.weapon!);
-        g.restore();
-      }
       if (p.kind === 'module') {
         g.fillStyle(0x193c36).fillRoundedRect(p.x - 13, y - 15, 26, 28, 5);
         g.lineStyle(2, color).strokeRoundedRect(p.x - 13, y - 15, 26, 28, 5);
         g.fillStyle(color)
           .fillTriangle(p.x + 3, y - 10, p.x - 7, y + 1, p.x + 1, y + 1)
           .fillTriangle(p.x - 1, y - 1, p.x + 7, y - 1, p.x - 3, y + 9);
-      }
-      if (p.kind === 'health') {
+      } else {
         g.fillStyle(0x2c5141).fillRoundedRect(p.x - 11, y - 11, 22, 22, 5);
         g.fillStyle(color)
           .fillRect(p.x - 2, y - 7, 4, 14)
@@ -407,12 +396,21 @@ export class ArenaRenderer {
         g.strokePath();
       }
     }
+    // Player projectiles (including flame cones) render first so that enemy
+    // bullets always stay visible above the fire — a close-range flamethrower
+    // must never hide the projectiles that can hit you.
     for (const b of m.bullets) {
-      if (b.enemy) {
-        g.fillStyle(b.color, 0.11).fillCircle(b.x, b.y, 13);
-        g.fillStyle(0x3b2330).fillCircle(b.x, b.y, 7);
-        g.lineStyle(2, b.color).strokeCircle(b.x, b.y, 5);
-        g.fillStyle(0xffe0ce).fillCircle(b.x - 1, b.y - 1, 2);
+      if (b.enemy) continue;
+      if (b.flame) {
+        const v = Math.hypot(b.vx, b.vy),
+          life = Math.max(0, Math.min(1, b.ttl * 4));
+        g.fillStyle(b.color, 0.16 * life).fillCircle(b.x, b.y, 11);
+        g.fillStyle(b.color, 0.4 * life).fillCircle(b.x, b.y, 6);
+        g.fillStyle(0xffe3b0, 0.75 * life).fillCircle(
+          b.x - (b.vx / v) * 3,
+          b.y - (b.vy / v) * 3,
+          3,
+        );
       } else {
         const v = Math.hypot(b.vx, b.vy);
         g.lineStyle(6, b.color, 0.1).lineBetween(
@@ -429,6 +427,13 @@ export class ArenaRenderer {
         );
         g.fillStyle(0xfff1d0).fillCircle(b.x, b.y, 2);
       }
+    }
+    for (const b of m.bullets) {
+      if (!b.enemy) continue;
+      g.fillStyle(b.color, 0.11).fillCircle(b.x, b.y, 13);
+      g.fillStyle(0x3b2330).fillCircle(b.x, b.y, 7);
+      g.lineStyle(2, b.color).strokeCircle(b.x, b.y, 5);
+      g.fillStyle(0xffe0ce).fillCircle(b.x - 1, b.y - 1, 2);
     }
     this.drawEffects(dt);
   }
@@ -485,15 +490,15 @@ export class ArenaRenderer {
   private drawGun(g: Graphics, id: WeaponId) {
     const c = WEAPONS[id].color;
     g.fillStyle(0x101c20).fillRoundedRect(-12, -5, 39, 10, 2).fillRect(-6, 4, 7, 6);
-    g.fillStyle(id === 'arc' ? 0x736789 : 0x697975).fillRoundedRect(-10, -5, 26, 8, 2);
+    g.fillStyle(id === 'flamer' ? 0x7a4a38 : 0x697975).fillRoundedRect(-10, -5, 26, 8, 2);
     g.fillStyle(c).fillRect(-7, -4, 10, 3);
     g.fillStyle(0x9baaa0).fillRect(19, -3, 10, 4);
-    if (id === 'shotgun') {
-      g.fillStyle(0x996e50).fillRect(6, -4, 10, 7);
-      g.fillStyle(0xc8ab8f).fillRect(20, 1, 9, 3);
-    }
-    if (id === 'arc') {
-      g.fillStyle(0xddd2fa).fillRect(7, -5, 3, 8).fillRect(13, -5, 3, 8);
+    if (id === 'flamer') {
+      // Wide nozzle plus an under-slung fuel tank: reads as a flamethrower at a glance.
+      g.fillStyle(0x3c2f28).fillRoundedRect(5, -6, 17, 12, 3);
+      g.fillStyle(c).fillRect(21, -4, 8, 8);
+      g.fillStyle(0x93502f).fillRoundedRect(-2, 5, 16, 9, 4);
+      g.fillStyle(0xd98c5f).fillRect(0, 7, 12, 3);
     }
   }
   private drawEnemy(g: Graphics, e: Enemy, t: number) {

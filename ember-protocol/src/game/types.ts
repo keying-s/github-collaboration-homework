@@ -6,7 +6,7 @@ export interface Rect extends Vec {
   w: number;
   h: number;
 }
-export type WeaponId = 'rifle' | 'shotgun' | 'arc';
+export type WeaponId = 'rifle' | 'flamer';
 export type SkillId = 'chain' | 'cryo' | 'pierce' | 'nova' | 'leech' | 'haste';
 export type EnemyKind = 'crawler' | 'spitter' | 'brute' | 'boss';
 export type BossId = 'flower' | 'zombie' | 'doll' | 'scorpion' | 'crow';
@@ -106,11 +106,12 @@ export interface Bullet extends Vec {
   pierce: number;
   hits: Set<number>;
   owner: 'player' | 'ally' | 'enemy';
+  /** Flame particles render as a soft cone spray instead of tracer lines. */
+  flame?: boolean;
 }
 export interface Pickup extends Vec {
   id: number;
-  kind: 'weapon' | 'health' | 'module';
-  weapon?: WeaponId;
+  kind: 'health' | 'module';
   age: number;
 }
 export interface Barrel extends Vec {
@@ -124,7 +125,6 @@ export interface InputState {
   dash: boolean;
   reload: boolean;
   interact: boolean;
-  switchWeapon: boolean;
 }
 export interface GameEvent extends Vec {
   type:

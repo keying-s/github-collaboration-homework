@@ -30,7 +30,6 @@ const EMPTY_INPUT: InputState = {
   dash: false,
   reload: false,
   interact: false,
-  switchWeapon: false,
 };
 
 /** Engine-independent model. All gameplay state is here; rendering never changes combat rules. */
@@ -47,7 +46,6 @@ export class Simulation {
   pickups: Pickup[] = [];
   barrels: Barrel[] = [];
   skills: SkillId[] = [];
-  inventory: WeaponId[] = ['rifle'];
   events: GameEvent[] = [];
   kills = 0;
   elapsed = 0;
@@ -73,6 +71,7 @@ export class Simulation {
   private fieldModuleDropped = false;
   private roomKills = 0;
   private offeredSkills: SkillId[] = [];
+  private flameTick = 0;
   constructor(private random: () => number = Math.random) {
     this.prepareRoom();
   }
@@ -122,15 +121,15 @@ export class Simulation {
     };
   }
 
-  start(squad = false) {
+  start(squad = false, weapon: WeaponId = 'rifle') {
     this.squad = squad;
     this.skills = [];
     this.offeredSkills = [];
-    this.inventory = ['rifle'];
     this.training = false;
     this.trainingDone = new Set();
     this.shotsFired = 0;
     this.player = this.newPlayer();
+    this.player.weapon = weapon;
     this.kills = 0;
     this.elapsed = 0;
     this.combo = 0;
@@ -214,14 +213,6 @@ export class Simulation {
     this.fieldModuleDropped = false;
     this.flowTimer = 0;
     this.hint = { key: 'stateReady' };
-    this.pickups.push({
-      id: this.nextId++,
-      x: 494,
-      y: 425,
-      kind: 'weapon',
-      weapon: this.levelIndex === 1 ? 'arc' : 'shotgun',
-      age: 0,
-    });
     this.emit('wave', this.player, { text: this.level.name });
   }
   nextLevel() {
@@ -312,14 +303,6 @@ export class Simulation {
         p.ammo = this.weapon.magazine;
       }
     }
-    if (input.switchWeapon && this.inventory.length > 1) {
-      const n = (this.inventory.indexOf(p.weapon) + 1) % this.inventory.length;
-      p.weapon = this.inventory[n];
-      if (this.training) this.trainingDone.add('switch');
-      p.ammo = this.weapon.magazine;
-      p.reloadRemaining = this.weapon.reload;
-      this.emit('reload', p);
-    }
     if (input.reload) {
       this.reload();
       if (this.training) this.trainingDone.add('reload');
@@ -361,14 +344,7 @@ export class Simulation {
       const item = this.nearestPickup;
       if (item && distance(item, p) < 78) {
         this.pickups = this.pickups.filter((v) => v.id !== item.id);
-        if (item.kind === 'weapon' && item.weapon) {
-          p.weapon = item.weapon;
-          if (!this.inventory.includes(item.weapon)) this.inventory.push(item.weapon);
-          p.ammo = this.weapon.magazine;
-          p.reloadRemaining = 0;
-          this.emit('pickup', p, { text: this.weapon.name, color: this.weapon.color });
-          if (this.training) this.trainingDone.add('pickup');
-        } else if (item.kind === 'module') {
+        if (item.kind === 'module') {
           this.upgradeSource = this.phase === 'exit' ? 'clear' : 'field';
           const available = SKILLS.filter((s) => !this.skills.includes(s.id)).map((s) => s.id);
           for (let i = available.length - 1; i > 0; i--) {
@@ -415,7 +391,8 @@ export class Simulation {
   }
   private fire(p: Vec, angle: number, id: WeaponId, owner: 'player' | 'ally') {
     const w = WEAPONS[id],
-      isPlayer = owner === 'player';
+      isPlayer = owner === 'player',
+      isFlame = id === 'flamer';
     for (let i = 0; i < w.pellets; i++) {
       const a =
         angle +
@@ -434,18 +411,22 @@ export class Simulation {
         damage,
         ttl: w.range / w.speed,
         enemy: false,
-        radius: 3,
+        radius: isFlame ? 5 : 3,
         color: isPlayer ? w.color : 0xa5e1cf,
-        pierce: isPlayer && this.skills.includes('pierce') ? 2 : 0,
+        pierce: isPlayer && this.skills.includes('pierce') && !isFlame ? 2 : 0,
         hits: new Set(),
         owner,
+        flame: isFlame,
       });
     }
-    this.emit(
-      'shot',
-      { x: p.x + Math.cos(angle) * 30, y: p.y + Math.sin(angle) * 30 },
-      { color: isPlayer ? w.color : 0x99ccbe, value: angle, loud: isPlayer },
-    );
+    // The flamer fires ~20 particles per second; throttle its feedback events so
+    // audio and particles mark the sustained stream, not every single particle.
+    if (!isFlame || this.flameTick++ % 8 === 0)
+      this.emit(
+        'shot',
+        { x: p.x + Math.cos(angle) * 30, y: p.y + Math.sin(angle) * 30 },
+        { color: isPlayer ? w.color : 0x99ccbe, value: angle, loud: isPlayer && !isFlame },
+      );
     if (isPlayer) this.shotsFired++;
   }
   private updateAlly(dt: number) {
@@ -951,15 +932,6 @@ export class Simulation {
         this.pickups.push({ id: this.nextId++, x: e.x, y: e.y, kind: 'module', age: 0 });
         this.hint = { key: 'moduleFound' };
       }
-      if (this.levelIndex === 1 && this.roomKills === 4)
-        this.pickups.push({
-          id: this.nextId++,
-          x: e.x,
-          y: e.y,
-          kind: 'weapon',
-          weapon: 'arc',
-          age: 0,
-        });
     }
     const old = this.enemies.length;
     this.enemies = this.enemies.filter((e) => e.hp > 0);
