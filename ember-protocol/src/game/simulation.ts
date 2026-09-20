@@ -55,6 +55,7 @@ export class Simulation {
   training = false;
   trainingDone = new Set<string>();
   shotsFired = 0;
+  dashed = false;
   hint: StatusMessage = { key: 'stateReady' };
   waveDelay = 1.5;
   private queue: EnemyKind[] = [];
@@ -124,6 +125,7 @@ export class Simulation {
     this.training = false;
     this.trainingDone = new Set();
     this.shotsFired = 0;
+    this.dashed = false;
     this.player = this.newPlayer();
     this.kills = 0;
     this.elapsed = 0;
@@ -144,6 +146,7 @@ export class Simulation {
     this.phase = 'combat';
     this.trainingDone = new Set();
     this.shotsFired = 0;
+    this.dashed = false;
     this.player.invincible = 999;
     this.barrels = [];
     this.enemies = [];
@@ -317,6 +320,7 @@ export class Simulation {
       p.invincible = 0.32;
       this.emit('dash', p, { color: 0xfab583 });
       if (this.training) this.trainingDone.add('dash');
+      else this.dashed = true;
       if (this.skills.includes('nova')) this.explode({ ...p }, 145, 65, false);
     }
     if (p.dashRemaining > 0) {
