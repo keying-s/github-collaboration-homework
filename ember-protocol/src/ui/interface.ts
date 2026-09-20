@@ -1,17 +1,18 @@
-import { LEVELS, SKILLS, WEAPONS } from '../game/config';
+import { BOSSES, LEVELS, UPGRADES, WEAPONS } from '../game/config';
 import { distance } from '../game/math';
 import type { AudioEngine } from '../game/audio';
 import type { Simulation } from '../game/simulation';
-import type { SkillId } from '../game/types';
+import type { BossId, UpgradeId, WeaponId } from '../game/types';
 import type { I18n, TranslationKey } from '../i18n';
 import { gunIcon, icon } from './icons';
 
 export class Interface {
   private squad = false;
+  private lastWeapon: WeaponId = 'rifle';
   private soundPanelOpen = false;
   private overlayKey = '';
   private weaponKey = '';
-  private skillKey = '';
+  private upgradeKey = '';
   private soundKey = '';
   private notice = '';
   private noticeTimer?: number;
@@ -24,6 +25,8 @@ export class Interface {
   private guideStep = 0;
   private readonly guideChapters = 4;
   private trainKey = '';
+  /** Card order in the nemesis window, reshuffled every visit. */
+  private bossOrder: BossId[] = [];
 
   constructor(
     private model: Simulation,
@@ -58,8 +61,8 @@ export class Interface {
           </section>
           <aside class="sidebar">
             <section class="mission-panel"><div class="panel-eyebrow"><span data-i18n="briefing">${t('briefing')}</span><span>BRIEFING / 01</span></div><h2><span data-i18n="missionTitle">${t('missionTitle')}</span><span data-i18n="missionSubtitle">${t('missionSubtitle')}</span></h2><div class="mission-route">${LEVELS.map((level, i) => `<div class="mission-step" data-step="${i}"><span class="step-marker">${i + 1}</span><div><b data-level-name="${i}">${this.i18n.text(level.name)}</b><small data-objective="${i}">${t(`levelObjective${i + 1}` as TranslationKey)}</small></div><span class="step-check"></span></div>`).join('')}</div><div class="run-stats"><div><small data-i18n="clearedCount">${t('clearedCount')}</small><b id="kills">00</b></div><div><small data-i18n="bestCombo">${t('bestCombo')}</small><b id="best-combo">00</b></div><div><small data-i18n="operationMode">${t('operationMode')}</small><b id="mode-label" class="mode-stat">${t('solo')}</b></div></div></section>
-            <section class="loadout-panel"><div class="panel-eyebrow"><span data-i18n="currentLoadout">${t('currentLoadout')}</span><kbd data-i18n="switchWeapon">${t('switchWeapon')}</kbd></div><div id="weapon-card"></div></section>
-            <section class="skills-panel"><div class="panel-eyebrow"><span data-i18n="skillModules">${t('skillModules')}</span><span id="skill-count">0 / 4</span></div><div id="skills-list"></div><p class="panel-note" data-i18n="skillNote">${t('skillNote')}</p></section>
+            <section class="loadout-panel"><div class="panel-eyebrow"><span data-i18n="currentLoadout">${t('currentLoadout')}</span></div><div id="weapon-card"></div></section>
+            <section class="skills-panel"><div class="panel-eyebrow"><span data-i18n="upgradeAxes">${t('upgradeAxes')}</span><span id="upgrade-total">0</span></div><div id="upgrades-list"></div><p class="panel-note" data-i18n="upgradeNote">${t('upgradeNote')}</p></section>
             <div class="fair-note">${icon('shield', 18)}<div><span data-i18n="fullState">${t('fullState')}</span><small data-i18n="noEconomy">${t('noEconomy')}</small></div></div>
           </aside>
         </main>
@@ -154,7 +157,11 @@ export class Interface {
     this.audio.unlock();
     const action = button.dataset.action;
     if (action === 'start') {
-      this.model.start(this.squad);
+      // Retry buttons carry no weapon; remember the run's choice so "RUN AGAIN"
+      // keeps the loadout the player picked at the menu.
+      const weapon = (button.dataset.weapon as WeaponId) ?? this.lastWeapon;
+      this.lastWeapon = weapon;
+      this.model.start(this.squad, weapon);
       this.overlayKey = '';
       (document.activeElement as HTMLElement)?.blur();
     }
@@ -206,7 +213,8 @@ export class Interface {
           .requestFullscreen()
           .catch(() => this.showNotice(this.i18n.t('fullscreenUnavailable')));
     }
-    if (action === 'skill') this.model.chooseSkill(button.dataset.skill as SkillId);
+    if (action === 'upgrade') this.model.chooseUpgrade(button.dataset.upgrade as UpgradeId);
+    if (action === 'bossPick') this.model.chooseBoss(button.dataset.boss as BossId);
     // Guide navigation (Next/Prev/chapter + tab switch) changes state but the
     // 70ms refresh() loop does not repaint the guide, so repaint it explicitly
     // here — otherwise the buttons appear unresponsive.
@@ -246,7 +254,7 @@ export class Interface {
     this.set('language-label', this.i18n.isChinese ? 'EN' : '中文');
     this.overlayKey = '';
     this.weaponKey = '';
-    this.skillKey = '';
+    this.upgradeKey = '';
     this.updateSound();
     if (this.guideOpen) this.renderGuide();
     this.refresh();
@@ -300,11 +308,10 @@ export class Interface {
     this.nodes['health-fill'].style.width = `${(p.hp / p.maxHp) * 100}%`;
     this.nodes['health-fill'].classList.toggle('critical', p.hp < 35);
     this.set('dash-value', p.dashCooldown > 0 ? `${p.dashCooldown.toFixed(1)}s` : text('ready'));
-    this.nodes['dash-fill'].style.width =
-      `${Math.max(0, 1 - p.dashCooldown / (m.skills.includes('nova') ? 1.65 : 2.2)) * 100}%`;
+    this.nodes['dash-fill'].style.width = `${Math.max(0, 1 - p.dashCooldown / 2.2) * 100}%`;
     this.set('ammo-name', this.i18n.text(m.weapon.name));
     this.set('ammo-value', p.reloadRemaining > 0 ? '··' : String(p.ammo).padStart(2, '0'));
-    this.set('ammo-max', p.reloadRemaining > 0 ? text('reloading') : `/ ${m.weapon.magazine}`);
+    this.set('ammo-max', p.reloadRemaining > 0 ? text('reloading') : `/ ${m.stats.magazine}`);
     this.set(
       'mission-line',
       this.notice || (menu ? text('chooseMode') : text(m.hint.key, m.hint.values)),
@@ -317,12 +324,20 @@ export class Interface {
     this.set('best-combo', String(m.bestCombo).padStart(2, '0'));
     this.set('mode-label', (menu ? this.squad : m.squad) ? text('aiCoop') : text('solo'));
     this.nodes['boss-bar'].style.display = m.boss ? 'block' : 'none';
-    if (m.boss) this.nodes['boss-fill'].style.width = `${(m.boss.hp / m.boss.maxHp) * 100}%`;
+    if (m.boss) {
+      this.nodes['boss-fill'].style.width = `${(m.boss.hp / m.boss.maxHp) * 100}%`;
+      const cfg = BOSSES.find((b) => b.id === (m.boss!.bossId ?? 'flower'))!;
+      const nameEl = this.nodes['boss-bar'].querySelector('b')!;
+      const enEl = this.nodes['boss-bar'].querySelector('span')!;
+      if (nameEl.textContent !== this.i18n.text(cfg.name))
+        nameEl.textContent = this.i18n.text(cfg.name);
+      if (enEl.textContent !== cfg.name.en) enEl.textContent = cfg.name.en;
+    }
+    if (m.phase !== 'bossSelect') this.bossOrder = [];
 
     const item = m.nearestPickup;
     let prompt = '';
-    if (item && distance(item, p) < 78)
-      prompt = `<kbd>E</kbd> ${item.kind === 'module' ? text('pickupModule') : text('equipWeapon', { name: this.i18n.text(WEAPONS[item.weapon!].name) })}`;
+    if (item && distance(item, p) < 78) prompt = `<kbd>E</kbd> ${text('openCrate')}`;
     else if (m.phase === 'exit' && distance(p, { x: 1160, y: 400 }) < 110)
       prompt = `<kbd>E</kbd> ${text(m.isLastLevel ? 'evacuate' : 'nextLevel')}`;
     else if (m.phase === 'exit') prompt = `${text('goPortal')} <span>→</span>`;
@@ -346,24 +361,23 @@ export class Interface {
             : '';
     });
 
-    const weaponKey = `${p.weapon}-${m.inventory.join()}-${this.i18n.locale}`;
+    const weaponKey = `${p.weapon}-${this.i18n.locale}`;
     if (weaponKey !== this.weaponKey) {
       this.weaponKey = weaponKey;
       this.nodes['weapon-card'].innerHTML =
-        `<div class="weapon-art">${gunIcon(p.weapon)}<span>0${m.inventory.indexOf(p.weapon) + 1}</span></div><div class="weapon-name"><h3>${this.i18n.text(m.weapon.name)}</h3><span>${m.weapon.id.toUpperCase()}</span></div><div class="weapon-type">${this.i18n.text(m.weapon.label)}</div><p>${this.i18n.text(m.weapon.description)}</p><div class="weapon-bars"><span>${text('firepower')} <i><b style="width:${p.weapon === 'shotgun' ? 90 : p.weapon === 'arc' ? 43 : 62}%"></b></i></span><span>${text('fireRate')} <i><b style="width:${p.weapon === 'shotgun' ? 28 : p.weapon === 'arc' ? 96 : 69}%"></b></i></span></div>`;
+        `<div class="weapon-art">${gunIcon(p.weapon)}</div><div class="weapon-name"><h3>${this.i18n.text(m.weapon.name)}</h3><span>${m.weapon.id.toUpperCase()}</span></div><div class="weapon-type">${this.i18n.text(m.weapon.label)}</div><p>${this.i18n.text(m.weapon.description)}</p><div class="weapon-bars"><span>${text('firepower')} <i><b style="width:${p.weapon === 'flamer' ? 78 : 62}%"></b></i></span><span>${text('fireRate')} <i><b style="width:${p.weapon === 'flamer' ? 96 : 69}%"></b></i></span></div>`;
     }
-    const skillKey = `${m.skills.join()}-${this.i18n.locale}`;
-    if (skillKey !== this.skillKey || !this.nodes['skills-list'].innerHTML) {
-      this.skillKey = skillKey;
-      this.set('skill-count', `${m.skills.length} / 4`);
-      this.nodes['skills-list'].innerHTML = m.skills.length
-        ? m.skills
-            .map((id) => {
-              const skill = SKILLS.find((candidate) => candidate.id === id)!;
-              return `<div class="equipped-skill" title="${this.i18n.text(skill.description)}"><i style="color:${skill.color}">${icon(skill.icon, 19)}</i><div><b>${this.i18n.text(skill.name)}</b><small>${this.i18n.text(skill.tag)}</small></div></div>`;
-            })
-            .join('')
-        : `<div class="empty-slots"><span>+</span><span>+</span><span>+</span><span>+</span></div><div class="empty-label">${text('emptySkill')}</div>`;
+    const upgradeKey = `${m.upgrades.join()}-${this.i18n.locale}`;
+    if (upgradeKey !== this.upgradeKey || !this.nodes['upgrades-list'].innerHTML) {
+      this.upgradeKey = upgradeKey;
+      this.set('upgrade-total', String(m.upgrades.length));
+      this.nodes['upgrades-list'].innerHTML = m.upgrades.length
+        ? UPGRADES.map((axis) => {
+            const stacks = m.upgrades.filter((u) => u === axis.id).length;
+            if (!stacks) return '';
+            return `<div class="equipped-skill"><i>${icon('bolt', 19)}</i><div><b>${this.i18n.text(axis.label)}</b><small>×${stacks}</small></div></div>`;
+          }).join('')
+        : `<div class="empty-slots"><span>+</span></div><div class="empty-label">${text('awaitCrate')}</div>`;
     }
     this.renderSoundPanel();
     this.renderOverlay();
@@ -394,25 +408,48 @@ export class Interface {
   private renderOverlay() {
     const m = this.model;
     const t = (key: TranslationKey) => this.i18n.t(key);
-    const key = `${m.phase}-${m.paused}-${this.squad}-${m.skills.join()}-${this.i18n.locale}`;
+    const key = `${m.phase}-${m.paused}-${this.squad}-${m.upgrades.join()}-${this.i18n.locale}`;
     if (key === this.overlayKey) return;
     this.overlayKey = key;
     const overlay = this.nodes.overlay;
     overlay.className = 'overlay';
     overlay.innerHTML = '';
     if (m.phase === 'menu') {
+      const weapons: WeaponId[] = ['flamer', 'rifle'];
       overlay.classList.add('menu-overlay');
-      overlay.innerHTML = `<div class="menu-content"><div class="eyebrow"><span></span> ${t('menuEyebrow')}</div><h1>${t('heroLine1')}<br><em>${t('heroLine2')}</em></h1><p class="menu-description">${t('menuDescription1')}<br>${t('menuDescription2')}</p><div class="mode-switch" role="group" aria-label="${t('operationMode')}"><button data-action="solo" class="${!this.squad ? 'selected' : ''}">${icon('person', 18)} ${t('soloAction')}</button><button data-action="squad" class="${this.squad ? 'selected' : ''}">${icon('people', 19)} ${t('aiCompanion')}</button></div><button class="start-button" data-action="start"><span>${t('enterZone')}</span>${icon('arrow', 22)}</button><div class="menu-meta"><span>${t('fourAreas')}</span><i></i><span>${t('threeWeapons')}</span><i></i><span>${t('sixSkills')}</span></div><div class="menu-tip">${icon('info', 14)} ${t('desktopTip')}</div></div><div class="arena-stamp"><span>FIELD TEST</span><strong>01—${String(LEVELS.length).padStart(2, '0')}</strong><small>${t('runMotto')}</small></div>`;
+      overlay.innerHTML = `<div class="menu-content"><div class="eyebrow"><span></span> ${t('menuEyebrow')}</div><h1>${t('heroLine1')}<br><em>${t('heroLine2')}</em></h1><p class="menu-description">${t('menuDescription1')}<br>${t('menuDescription2')}</p><div class="mode-switch" role="group" aria-label="${t('operationMode')}"><button data-action="solo" class="${!this.squad ? 'selected' : ''}">${icon('person', 18)} ${t('soloAction')}</button><button data-action="squad" class="${this.squad ? 'selected' : ''}">${icon('people', 19)} ${t('aiCompanion')}</button></div><div class="weapon-choice" role="group" aria-label="${t('chooseLoadout')}"><span class="choice-label">${t('chooseLoadout')}</span>${weapons.map((id) => `<button class="weapon-pick" data-action="start" data-weapon="${id}"><span class="pick-art">${gunIcon(id)}</span><b>${this.i18n.text(WEAPONS[id].name)}</b><small>${this.i18n.text(WEAPONS[id].description)}</small></button>`).join('')}</div><div class="menu-meta"><span>${t('fourAreas')}</span><i></i><span>${t('twoLoadouts')}</span><i></i><span>${t('fiveAxes')}</span></div><div class="menu-tip">${icon('info', 14)} ${t('desktopTip')}</div></div><div class="arena-stamp"><span>FIELD TEST</span><strong>01—${String(LEVELS.length).padStart(2, '0')}</strong><small>${t('runMotto')}</small></div>`;
     } else if (m.phase === 'upgrade') {
       overlay.classList.add('modal-overlay');
-      overlay.innerHTML = `<div class="upgrade-modal"><div class="eyebrow">${t('upgradeEyebrow')}</div><h2>${t('upgradeTitle1')}<em>${t('upgradeTitle2')}</em></h2><p>${t('upgradeDescription')}</p><div class="upgrade-options">${m.options.map((skill, i) => `<button class="upgrade-option" data-action="skill" data-skill="${skill.id}"><span class="option-index">MODULE / 0${i + 1}</span><i style="color:${skill.color}">${icon(skill.icon, 34)}</i><span class="skill-tag" style="color:${skill.color}">${this.i18n.text(skill.tag)}</span><h3>${this.i18n.text(skill.name)}</h3><p>${this.i18n.text(skill.description)}</p><span class="choose-label">${t('equipModule')} ${icon('arrow', 17)}</span></button>`).join('')}</div><small>${t('upgradePaused')}</small></div>`;
+      overlay.innerHTML = `<div class="upgrade-modal"><div class="eyebrow">${t('upgradeEyebrow')}</div><h2>${t('upgradeTitle1')}<em>${t('upgradeTitle2')}</em></h2><p>${t('upgradeDescription')}</p><div class="upgrade-options">${m.options
+        .map((option, i) => {
+          const stacks = m.upgrades.filter((u) => u === option.id).length;
+          return `<button class="upgrade-option" data-action="upgrade" data-upgrade="${option.id}"><span class="option-index">SUPPLY / 0${i + 1}</span><i>${icon('bolt', 34)}</i><h3>${this.i18n.text(option.label)}</h3>${stacks ? `<span class="skill-tag">×${stacks}</span>` : ''}<span class="choose-label">${t('takeUpgrade')} ${icon('arrow', 17)}</span></button>`;
+        })
+        .join('')}</div><small>${t('upgradePaused')}</small></div>`;
+    } else if (m.phase === 'bossSelect') {
+      overlay.classList.add('modal-overlay');
+      if (!this.bossOrder.length) {
+        this.bossOrder = [...BOSSES].map((b) => b.id);
+        for (let i = this.bossOrder.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [this.bossOrder[i], this.bossOrder[j]] = [this.bossOrder[j], this.bossOrder[i]];
+        }
+      }
+      const cards = this.bossOrder
+        .map((id) => BOSSES.find((b) => b.id === id)!)
+        .map((cfg) => {
+          const hex = `#${cfg.color.toString(16).padStart(6, '0')}`;
+          return `<button class="upgrade-option boss-card" data-action="bossPick" data-boss="${cfg.id}"><span class="option-index">NEMESIS / ${cfg.id.toUpperCase()}</span><i class="boss-glyph">${cfg.glyph}</i><span class="skill-tag" style="color:${hex}">${this.i18n.text(cfg.tag)}</span><h3>${this.i18n.text(cfg.name)}</h3><p>${this.i18n.text(cfg.description)}</p><span class="choose-label">${t('bossFight')} ${icon('arrow', 17)}</span></button>`;
+        })
+        .join('');
+      overlay.innerHTML = `<div class="upgrade-modal boss-modal"><div class="eyebrow">${t('bossSelectEyebrow')}</div><h2>${t('bossSelectTitle')}<em>FINAL DUEL</em></h2><p>${t('bossSelectDesc')}</p><div class="boss-options">${cards}</div><small>${t('bossSelectNote')}</small></div>`;
     } else if (m.phase === 'won' || m.phase === 'lost') {
       const won = m.phase === 'won';
       overlay.classList.add('modal-overlay');
       overlay.innerHTML = `<div class="result-modal"><div class="result-emblem">${icon(won ? 'flag' : 'shield', 44)}</div><div class="eyebrow">${won ? 'MISSION COMPLETE' : 'SIGNAL LOST'}</div><h2>${t(won ? 'wonTitle' : 'lostTitle')}</h2><p>${t(won ? 'wonDescription' : 'lostDescription')}</p><div class="result-stats"><div><b>${m.kills}</b><small>${t('enemiesCleared')}</small></div><div><b>${m.bestCombo}</b><small>${t('bestCombo')}</small></div><div><b>${Math.floor(m.elapsed / 60)}:${String(Math.floor(m.elapsed % 60)).padStart(2, '0')}</b><small>${t('runTime')}</small></div></div><button class="start-button" data-action="start"><span>${t('retry')}</span>${icon('reset')}</button><button class="text-button" data-action="home">${t('returnHome')}</button></div>`;
     } else if (m.paused) {
       overlay.classList.add('modal-overlay');
-      overlay.innerHTML = `<div class="pause-modal"><div class="eyebrow">TAKE A BREATH</div><h2>${t('pauseHeading')}</h2><p>${t('pauseDescription')}</p><button class="start-button" data-action="resume"><span>${t('resume')}</span>${icon('play')}</button><button class="text-button" data-action="guide"><span>${icon('book', 16)}</span><span>${t('guideButton')}</span></button><button class="text-button" data-action="home">${t('endRun')}</button>      <div class="pause-controls"><span>${t('controlMoveFire')}</span><span>${t('controlDashReload')}</span><span>${t('controlPickupSwitch')}</span></div></div>`;
+      overlay.innerHTML = `<div class="pause-modal"><div class="eyebrow">TAKE A BREATH</div><h2>${t('pauseHeading')}</h2><p>${t('pauseDescription')}</p><button class="start-button" data-action="resume"><span>${t('resume')}</span>${icon('play')}</button><button class="text-button" data-action="guide"><span>${icon('book', 16)}</span><span>${t('guideButton')}</span></button><button class="text-button" data-action="home">${t('endRun')}</button><div class="pause-controls"><span>${t('controlMoveFire')}</span><span>${t('controlDashReload')}</span><span>${t('controlInteract')}</span></div></div>`;
     }
   }
 
@@ -572,7 +609,8 @@ export class Interface {
     const place = (wx: number, wy: number) =>
       `left:${(wx * sx).toFixed(1)}px;top:${(wy * sy).toFixed(1)}px;`;
     let html = '';
-    const wp = m.pickups.find((p) => p.kind === 'weapon');
+    // Crates are the E-interactable pickup the coach layer points at.
+    const wp = m.pickups.find((p) => p.kind === 'crate');
     if (wp)
       html += `<div class="coach-pickup" style="${place(wp.x, wp.y - 50)}"><kbd>E</kbd><span>${t('ctrlInteract')}</span></div>`;
     if (m.phase === 'exit')

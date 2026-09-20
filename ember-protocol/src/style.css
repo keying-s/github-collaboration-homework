@@ -981,6 +981,58 @@ button:hover {
   background: #435039;
   box-shadow: 0 1px 3px #0002;
 }
+.weapon-choice {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  width: 300px;
+  max-width: 100%;
+  margin-bottom: 13px;
+}
+.weapon-choice .choice-label {
+  grid-column: 1 / -1;
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: #8a9d7e;
+}
+.weapon-pick {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 12px 12px 14px;
+  background: #0e201880;
+  border: 1px solid #52634a55;
+  border-radius: 8px;
+  color: #e8dcc2;
+  text-align: left;
+  transition:
+    background 0.2s,
+    transform 0.2s,
+    border-color 0.2s;
+}
+.weapon-pick .pick-art {
+  width: 96px;
+  height: 36px;
+}
+.weapon-pick .pick-art svg {
+  width: 100%;
+  height: 100%;
+}
+.weapon-pick b {
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+.weapon-pick small {
+  font-size: 10px;
+  line-height: 1.5;
+  color: #8fa383;
+}
+.weapon-pick:hover {
+  background: #435039;
+  border-color: #efb58a66;
+  transform: translateY(-2px);
+}
 .start-button {
   display: flex;
   align-items: center;
@@ -2116,5 +2168,46 @@ kbd {
   }
   50% {
     opacity: 1;
+  }
+}
+
+/* ===== Nemesis selection (final arena) ===== */
+.boss-options {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin: 26px 0 20px;
+}
+.boss-options .upgrade-option {
+  min-height: 305px;
+  padding: 16px 14px 0;
+}
+.boss-glyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 78px;
+  height: 82px;
+  align-self: center;
+  margin: 12px 0 14px;
+  border: 1px solid #829f6d30;
+  border-radius: 14px;
+  background: #1c2a22;
+  font-size: 46px;
+  line-height: 1;
+}
+.boss-card h3 {
+  font-size: 17px;
+}
+.boss-card p {
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+.boss-modal .upgrade-options {
+  display: none;
+}
+@media (max-width: 1380px) {
+  .boss-options {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
