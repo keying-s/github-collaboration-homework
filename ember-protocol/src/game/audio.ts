@@ -258,7 +258,6 @@ export class AudioEngine {
       dash: [250, 550, 0.16, 'sine'],
       hurt: [130, 50, 0.2, 'square'],
       pickup: [430, 920, 0.22, 'sine'],
-      chain: [650, 220, 0.1, 'triangle'],
       reload: [240, 320, 0.05, 'triangle'],
       clear: [390, 780, 0.4, 'sine'],
       win: [520, 1040, 0.65, 'sine'],

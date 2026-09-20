@@ -21,10 +21,6 @@ interface Ring extends Vec {
   radius: number;
   color: number;
 }
-interface Arc extends Vec {
-  target: Vec;
-  life: number;
-}
 /** A corpse left behind by a kill: different causes die in different ways. */
 interface Death extends Vec {
   kind: Enemy['kind'];
@@ -54,7 +50,6 @@ export class ArenaRenderer {
   private labels: Phaser.GameObjects.Text[] = [];
   private particles: Particle[] = [];
   private rings: Ring[] = [];
-  private arcs: Arc[] = [];
   private deaths: Death[] = [];
   private flashes: Flash[] = [];
   private recoil = { x: 0, y: 0, life: 0 };
@@ -90,7 +85,6 @@ export class ArenaRenderer {
   reset() {
     this.particles = [];
     this.rings = [];
-    this.arcs = [];
     this.deaths = [];
     this.flashes = [];
     this.recoil = { x: 0, y: 0, life: 0 };
@@ -285,16 +279,18 @@ export class ArenaRenderer {
     }
     for (const p of m.pickups) {
       const y = p.y + Math.sin(time * 2.6 + p.id) * 4,
-        color = p.kind === 'module' ? 0xa5d6bc : 0xb7e699;
+        color = p.kind === 'crate' ? 0xe8b46a : 0xb7e699;
       g.fillStyle(color, 0.035).fillCircle(p.x, p.y, 44);
       g.fillStyle(color, 0.07).fillCircle(p.x, p.y, 30);
       g.lineStyle(1, color, 0.4).strokeEllipse(p.x, p.y + 15, 48, 19);
-      if (p.kind === 'module') {
-        g.fillStyle(0x193c36).fillRoundedRect(p.x - 13, y - 15, 26, 28, 5);
-        g.lineStyle(2, color).strokeRoundedRect(p.x - 13, y - 15, 26, 28, 5);
-        g.fillStyle(color)
-          .fillTriangle(p.x + 3, y - 10, p.x - 7, y + 1, p.x + 1, y + 1)
-          .fillTriangle(p.x - 1, y - 1, p.x + 7, y - 1, p.x - 3, y + 9);
+      if (p.kind === 'crate') {
+        // Supply crate: wooden box with an amber strap, reads as "open me for gear".
+        g.fillStyle(0x241d14, 0.4).fillEllipse(p.x + 3, p.y + 16, 34, 12);
+        g.fillStyle(0x5c4a30).fillRoundedRect(p.x - 16, y - 14, 32, 28, 4);
+        g.fillStyle(0x7a5f3c).fillRoundedRect(p.x - 13, y - 11, 26, 22, 3);
+        g.fillStyle(color).fillRect(p.x - 16, y - 3, 32, 6);
+        g.lineStyle(2, 0x3a2f1e).strokeRoundedRect(p.x - 16, y - 14, 32, 28, 4);
+        g.fillStyle(0xfff1cc).fillRect(p.x - 2, y - 9, 4, 4);
       } else {
         g.fillStyle(0x2c5141).fillRoundedRect(p.x - 11, y - 11, 22, 22, 5);
         g.fillStyle(color)
@@ -362,7 +358,7 @@ export class ArenaRenderer {
       if (p.invincible > 0) {
         g.lineStyle(2, 0xf6cba4, 0.3 + Math.sin(time * 20) * 0.2).strokeCircle(p.x, p.y, 26);
       }
-      const maxDash = m.skills.includes('nova') ? 1.65 : 2.2;
+      const maxDash = 2.2;
       if (p.dashCooldown > 0) {
         g.lineStyle(3, 0x8fd3e6, 0.85).beginPath();
         g.arc(
@@ -899,8 +895,6 @@ export class ArenaRenderer {
         color: event.type === 'kill' ? this.warm(color, this.comboTier()) : color,
       });
     }
-    if (event.type === 'chain' && event.target)
-      this.arcs.push({ x: event.x, y: event.y, target: event.target, life: 0.18 });
     if ((event.type === 'hit' && event.value) || event.type === 'pickup') {
       const t = this.scene.add
         .text(
@@ -909,7 +903,7 @@ export class ArenaRenderer {
           event.type === 'pickup'
             ? event.text
               ? this.i18n.text(event.text)
-              : this.i18n.t('pickupModule')
+              : this.i18n.t('openCrate')
             : String(event.value),
           {
             fontFamily: 'Consolas, Microsoft YaHei, monospace',
@@ -966,20 +960,6 @@ export class ArenaRenderer {
       );
     }
     this.rings = this.rings.filter((r) => r.life > 0);
-    for (const a of this.arcs) {
-      a.life -= dt;
-      g.lineStyle(3, 0xc4f2f2, Math.max(0, a.life / 0.18));
-      g.beginPath();
-      g.moveTo(a.x, a.y);
-      for (let i = 1; i < 6; i++)
-        g.lineTo(
-          a.x + ((a.target.x - a.x) * i) / 6 + (this.random() - 0.5) * 20,
-          a.y + ((a.target.y - a.y) * i) / 6 + (this.random() - 0.5) * 20,
-        );
-      g.lineTo(a.target.x, a.target.y);
-      g.strokePath();
-    }
-    this.arcs = this.arcs.filter((a) => a.life > 0);
     this.drawDeaths(dt);
     this.drawFlashes(dt);
     if (this.edgeFlash > 0) {

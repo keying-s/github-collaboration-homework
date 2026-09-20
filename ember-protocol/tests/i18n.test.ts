@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { LEVELS, SKILLS, WEAPONS } from '../src/game/config';
+import { LEVELS, UPGRADES, WEAPONS } from '../src/game/config';
 import type { LocalizedText } from '../src/game/types';
 import { localize, TRANSLATIONS } from '../src/i18n';
 
@@ -11,16 +11,14 @@ function assertBilingual(value: LocalizedText, label: string) {
   assert.equal(localize(value, 'en'), value.en);
 }
 
-test('every configured level, weapon and skill has Chinese and English copy', () => {
+test('every configured level, weapon and upgrade axis has Chinese and English copy', () => {
   for (const [id, weapon] of Object.entries(WEAPONS)) {
     assertBilingual(weapon.name, `weapon ${id} name`);
     assertBilingual(weapon.label, `weapon ${id} label`);
     assertBilingual(weapon.description, `weapon ${id} description`);
   }
-  for (const skill of SKILLS) {
-    assertBilingual(skill.name, `skill ${skill.id} name`);
-    assertBilingual(skill.tag, `skill ${skill.id} tag`);
-    assertBilingual(skill.description, `skill ${skill.id} description`);
+  for (const option of UPGRADES) {
+    assertBilingual(option.label, `upgrade ${option.id} label`);
   }
   for (const [index, level] of LEVELS.entries()) {
     assertBilingual(level.name, `level ${index + 1} name`);
