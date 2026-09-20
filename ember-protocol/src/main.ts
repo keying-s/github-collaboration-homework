@@ -10,6 +10,8 @@ const simulation = new Simulation();
 const audio = new AudioEngine();
 const i18n = new I18n();
 const ui = new Interface(simulation, audio, i18n);
+// Debug/testing hook: drive the simulation from the browser console.
+(window as unknown as { __ember?: Simulation }).__ember = simulation;
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game',

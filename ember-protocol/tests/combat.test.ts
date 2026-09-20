@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Simulation } from '../src/game/simulation.ts';
-import { LEVELS, WEAPONS } from '../src/game/config.ts';
+import { LEVELS, WEAPONS, WORLD } from '../src/game/config.ts';
 import {
   circleRect,
   distance,
@@ -233,6 +233,10 @@ test('all six waves, boss, modules and exits form a complete three-room campaign
       m.player.y = 445;
       continue;
     }
+    if (m.phase === 'bossSelect') {
+      m.chooseBoss('flower');
+      continue;
+    }
     const module = m.pickups.find((p) => p.kind === 'module');
     if (module && m.skills.length < 4) {
       m.player.x = module.x;
@@ -260,7 +264,8 @@ test('all six waves, boss, modules and exits form a complete three-room campaign
   );
   assert.equal(roomExits, 4);
   assert.equal(reachedBoss, true);
-  assert.equal(m.kills, 60);
+  // Elites split and bosses summon reinforcements, so the floor is the wave total.
+  assert.ok(m.kills >= 57, `expected at least 57 kills, got ${m.kills}`);
   assert.equal(m.skills.length, 4);
 });
 
@@ -352,4 +357,88 @@ test('random module drafts can offer all six skills, stay stable and never repea
     assert.ok(!m.options.some((s) => s.id === first[0]));
   }
   assert.equal(seen.size, 6);
+});
+
+test('knockback pushes hit enemies back without wedging them into cover', () => {
+  const m = game();
+  m.waveDelay = 100;
+  const e = enemy(760, 445, 'crawler');
+  e.hp = 100000;
+  e.maxHp = 100000;
+  e.cooldown = 1000000;
+  m.enemies = [e];
+  const startX = e.x;
+  let pushedBack = false;
+  for (let frame = 0; frame < 180; frame++) {
+    m.tick(1 / 60, { ...idle, aim: { x: e.x, y: e.y }, firing: true });
+    assert.ok(
+      !m.level.obstacles.some((b) => circleRect(e, e.radius - 0.5, b)),
+      `knockback pushed an enemy into cover at ${e.x},${e.y}`,
+    );
+    assert.ok(
+      e.x >= WORLD.inset - 1 &&
+        e.x <= WORLD.width - WORLD.inset + 1 &&
+        e.y >= WORLD.inset - 1 &&
+        e.y <= WORLD.height - WORLD.inset + 1,
+      `knockback pushed an enemy out of the arena at ${e.x},${e.y}`,
+    );
+    if (e.x > startX + 8) pushedBack = true;
+  }
+  assert.ok(pushedBack, 'a hit should visibly push the enemy along the bullet');
+});
+
+test('kill hitstop is short, bounded and never accumulates across kills', () => {
+  const m = game();
+  m.waveDelay = 100;
+  for (const kind of ['crawler', 'spitter', 'brute'] as const) {
+    const e = enemy(700, 445, kind);
+    e.hp = 1;
+    e.maxHp = 1;
+    e.cooldown = 1000000;
+    m.enemies = [e];
+    m.freeze = 0;
+    for (let frame = 0; frame < 40 && m.freeze === 0; frame++)
+      m.tick(1 / 60, { ...idle, aim: { x: e.x, y: e.y }, firing: true });
+    assert.ok(m.freeze > 0, `${kind} kill should trigger a hitstop`);
+    assert.ok(m.freeze <= 0.09 + 1e-9, `${kind} hitstop too long: ${m.freeze}`);
+    // The world resumes once the freeze budget is spent.
+    for (let frame = 0; frame < 10; frame++) m.tick(1 / 60, idle);
+    assert.equal(m.freeze, 0);
+  }
+});
+
+test('training mode is a safe sandbox: no damage, dummies respawn, drills are tracked', () => {
+  const m = new Simulation(seededRandom(7));
+  m.beginTraining();
+  assert.equal(m.training, true);
+  assert.equal(m.phase, 'combat');
+  assert.ok(m.player.invincible > 0, 'player is invincible in training');
+  assert.ok(m.enemies.length >= 3, 'training spawns stationary dummies');
+  // Firing marks the shoot drill and never harms the player.
+  step(m, 0.3, { firing: true });
+  assert.ok(m.trainingDone.has('shoot'));
+  assert.equal(m.player.hp, m.player.maxHp);
+  // Dashing marks the dash drill.
+  m.tick(1 / 60, { ...idle, move: { x: 1, y: 0 }, dash: true });
+  assert.ok(m.trainingDone.has('dash'));
+  // Weapon pickups and Q-switching were removed by the starting-weapon rework;
+  // reloading is the remaining weapon-handling drill.
+  m.player.ammo = 1;
+  m.tick(1 / 60, { ...idle, reload: true });
+  assert.ok(m.trainingDone.has('reload'));
+  // Dummies that reach 0 hp respawn instead of vanishing.
+  for (const e of m.enemies) {
+    e.hp = 0;
+    e.deathHandled = false;
+  }
+  m.tick(1 / 60, idle);
+  assert.equal(
+    m.enemies.filter((e) => e.hp > 0).length,
+    m.enemies.length,
+    'training dummies respawn',
+  );
+  // Leaving training returns to the menu.
+  m.endTraining();
+  assert.equal(m.training, false);
+  assert.equal(m.phase, 'menu');
 });

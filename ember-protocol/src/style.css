@@ -151,6 +151,9 @@ button:hover {
   align-items: center;
   gap: 18px;
   margin-left: 50px;
+  min-width: 0;
+  overflow: hidden;
+  flex: 0 1 auto;
 }
 .route-node {
   display: flex;
@@ -193,6 +196,7 @@ button:hover {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-shrink: 0;
 }
 .sound-panel {
   position: absolute;
@@ -1400,6 +1404,28 @@ kbd {
     font-size: 24px;
   }
 }
+/* Four-room rail is wide: compact it before the tools get squeezed out. */
+@media (max-width: 1550px) {
+  .route {
+    gap: 6px;
+    margin-left: 14px;
+  }
+  .route > i {
+    width: 10px;
+  }
+  .route-node {
+    font-size: 11px;
+    gap: 4px;
+  }
+  .route-node div[data-level-name] {
+    font-size: 10px;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+  }
+  .build-tag {
+    display: none;
+  }
+}
 @media (max-width: 1250px) {
   .shell {
     padding: 0 22px;
@@ -1758,5 +1784,430 @@ kbd {
   }
   .upgrade-options {
     margin: 22px 0 17px;
+  }
+}
+
+/* ===== Onboarding: guide overlay, training panel, room-1 coach hints ===== */
+.guide-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0b1814ee;
+  backdrop-filter: blur(6px);
+  pointer-events: auto;
+  padding: 24px;
+}
+.guide-card {
+  width: 100%;
+  max-width: 620px;
+  max-height: 90vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  background: linear-gradient(160deg, #1c3329, #16271f);
+  border: 1px solid #5c715f;
+  border-radius: 14px;
+  padding: 22px 26px 26px;
+  box-shadow: 0 24px 70px #050d0acc;
+  animation: guideIn 0.32s ease;
+}
+@keyframes guideIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.guide-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #34493e;
+  padding-bottom: 14px;
+}
+.guide-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #f0c79c;
+  font-size: 13px;
+  letter-spacing: 1px;
+}
+.guide-head-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.guide-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 18px 0 22px;
+  background: #0e201880;
+  border: 1px solid #52634a55;
+  border-radius: 8px;
+  padding: 4px;
+}
+.guide-tab {
+  flex: 1;
+  padding: 9px 0;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: #8fa580;
+  background: none;
+  border-radius: 5px;
+  transition:
+    color 0.15s,
+    background 0.15s;
+}
+.guide-tab.on {
+  color: #23352b;
+  background: #c8d6b1;
+  font-weight: 700;
+}
+.guide-body {
+  min-height: 280px;
+}
+/* Story */
+.story-wrap {
+  text-align: center;
+}
+.story-wrap .eyebrow {
+  justify-content: center;
+}
+.chapter {
+  margin: 26px auto 22px;
+  max-width: 460px;
+}
+.chapter h3 {
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  color: #f0c79c;
+  margin: 0 0 16px;
+}
+.chapter p {
+  font-size: 13px;
+  line-height: 2.1;
+  color: #c3d0b4;
+  margin: 0;
+}
+.chapter.in {
+  animation: chapterIn 0.45s ease;
+}
+@keyframes chapterIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.progress {
+  display: flex;
+  justify-content: center;
+  gap: 9px;
+  margin-bottom: 22px;
+}
+.progress i {
+  width: 26px;
+  height: 3px;
+  border-radius: 2px;
+  background: #3c5043;
+  transition: background 0.2s;
+}
+.progress i.on {
+  background: #efb58a;
+}
+.guide-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.guide-nav .text-button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.guide-next {
+  flex: 0 1 auto;
+  width: auto;
+  min-width: 150px;
+  margin: 0;
+}
+/* Controls */
+.controls-list {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+.ctrl-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 12px;
+  color: #c3d0b4;
+}
+.ctrl-row kbd {
+  min-width: 96px;
+  text-align: center;
+  border-color: #6b8a5d;
+  color: #e7e6cd;
+  background: #25382166;
+  animation: keyPulse 1.8s ease-in-out infinite;
+}
+.ctrl-row kbd svg {
+  vertical-align: -3px;
+}
+@keyframes keyPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 #efb58a00;
+  }
+  50% {
+    box-shadow: 0 0 0 3px #efb58a3a;
+  }
+}
+/* Practice */
+.practice-wrap {
+  text-align: center;
+}
+.practice-wrap .eyebrow {
+  justify-content: center;
+}
+.guide-lead {
+  font-size: 12px;
+  line-height: 2.1;
+  color: #c3d0b4;
+  max-width: 480px;
+  margin: 22px auto 26px;
+}
+.practice-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.practice-actions .start-button {
+  width: 280px;
+  max-width: 100%;
+  margin: 0;
+}
+/* Training panel (in-arena coach) */
+.training-panel {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(420px, 70cqw);
+  pointer-events: none;
+  text-align: center;
+}
+.training-panel > * {
+  pointer-events: auto;
+}
+.train-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.train-head b {
+  font-size: 13px;
+  letter-spacing: 2px;
+  color: #f0c79c;
+}
+.train-head span {
+  font-size: 8px;
+  letter-spacing: 1px;
+  color: #88a07c;
+  background: #14291eb0;
+  border: 1px solid #52634a55;
+  padding: 3px 8px;
+  border-radius: 20px;
+}
+.train-steps {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  background: #14291ecc;
+  border: 1px solid #52634a55;
+  border-radius: 9px;
+  padding: 10px 12px;
+}
+.train-step {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10px;
+  color: #8fa380;
+  opacity: 0.7;
+}
+.train-step.done {
+  color: #d6e3c2;
+  opacity: 1;
+}
+.train-check {
+  width: 17px;
+  height: 17px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid #4f6543;
+  color: #b1c699;
+}
+.train-step.done .train-check {
+  background: #3a5536;
+  border-color: #6f9560;
+}
+.train-done {
+  margin-top: 12px;
+  font-size: 12px;
+  color: #cfe0b6;
+  letter-spacing: 0.5px;
+}
+.train-exit {
+  width: auto;
+  min-width: 180px;
+  margin: 12px auto 0;
+}
+/* Room-1 contextual coach hints */
+.coach-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.coach-pickup {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: #14291ee6;
+  border: 1px solid #82936c99;
+  color: #eee3c8;
+  padding: 7px 11px;
+  border-radius: 7px;
+  font-size: 11px;
+  white-space: nowrap;
+  box-shadow: 0 6px 20px #050d0a66;
+  animation: coachBob 1.5s ease-in-out infinite;
+}
+.coach-pickup kbd {
+  border-color: #becea199;
+  color: #e9e6cd;
+}
+@keyframes coachBob {
+  0%,
+  100% {
+    transform: translate(-50%, -50%);
+  }
+  50% {
+    transform: translate(-50%, calc(-50% - 7px));
+  }
+}
+.coach-portal {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  color: #f0c79c;
+  text-shadow: 0 2px 8px #10221c;
+}
+.coach-portal > span {
+  font-size: 30px;
+  line-height: 1;
+  animation: coachPulse 1.2s ease-in-out infinite;
+}
+.coach-portal small {
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+@keyframes coachPulse {
+  0%,
+  100% {
+    transform: translateX(0);
+    opacity: 0.7;
+  }
+  50% {
+    transform: translateX(8px);
+    opacity: 1;
+  }
+}
+.coach-shoot {
+  position: absolute;
+  top: 16%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #14291ee6;
+  border: 1px solid #82936c66;
+  color: #eee3c8;
+  border-radius: 6px;
+  padding: 9px 16px;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  animation: coachFade 2.4s ease-in-out infinite;
+}
+@keyframes coachFade {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ===== Nemesis selection (final arena) ===== */
+.boss-options {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin: 26px 0 20px;
+}
+.boss-options .upgrade-option {
+  min-height: 305px;
+  padding: 16px 14px 0;
+}
+.boss-glyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 78px;
+  height: 82px;
+  align-self: center;
+  margin: 12px 0 14px;
+  border: 1px solid #829f6d30;
+  border-radius: 14px;
+  background: #1c2a22;
+  font-size: 46px;
+  line-height: 1;
+}
+.boss-card h3 {
+  font-size: 17px;
+}
+.boss-card p {
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+.boss-modal .upgrade-options {
+  display: none;
+}
+@media (max-width: 1380px) {
+  .boss-options {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }

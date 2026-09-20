@@ -1,12 +1,15 @@
-import { LEVELS, SKILLS, WEAPONS, WORLD } from './config';
+import { BOSSES, LEVELS, SKILLS, WEAPONS, WORLD } from './config';
 import { circleRect, clamp, distance, normalize, segmentCircle, segmentRect } from './math';
 import type {
   Barrel,
   Bullet,
+  BossId,
   Enemy,
   EnemyKind,
+  EnemySkin,
   GameEvent,
   InputState,
+  KillCause,
   Phase,
   Pickup,
   Player,
@@ -18,6 +21,8 @@ import type {
 
 const RADII = { crawler: 20, spitter: 23, brute: 31, boss: 58 };
 const HP = { crawler: 48, spitter: 66, brute: 185, boss: 1250 };
+/** Visual theme of the regular enemies, ordered by level. */
+const SKINS: EnemySkin[] = ['spider', 'bat', 'alien'];
 const EMPTY_INPUT: InputState = {
   move: { x: 0, y: 0 },
   aim: { x: 800, y: 400 },
@@ -48,9 +53,15 @@ export class Simulation {
   bestCombo = 0;
   comboTime = 0;
   damageTaken = 0;
+  freeze = 0;
+  training = false;
+  trainingDone = new Set<string>();
+  shotsFired = 0;
   hint: StatusMessage = { key: 'stateReady' };
   waveDelay = 1.5;
-  private queue: EnemyKind[] = [];
+  /** Final-boss choice, picked in the pre-arena selection window. */
+  bossId: BossId | null = null;
+  private queue: string[] = [];
   private spawnTimer = 0;
   private nextId = 1;
   private hitCount = 0;
@@ -114,6 +125,9 @@ export class Simulation {
     this.squad = squad;
     this.skills = [];
     this.offeredSkills = [];
+    this.training = false;
+    this.trainingDone = new Set();
+    this.shotsFired = 0;
     this.player = this.newPlayer();
     this.player.weapon = weapon;
     this.kills = 0;
@@ -122,10 +136,56 @@ export class Simulation {
     this.bestCombo = 0;
     this.damageTaken = 0;
     this.hitCount = 0;
+    this.freeze = 0;
     this.levelIndex = 0;
+    this.bossId = null;
     this.paused = false;
     this.phase = 'combat';
     this.prepareRoom();
+  }
+  /** Safe practice sandbox: invincible player, stationary dummies, no waves. */
+  beginTraining() {
+    this.start(false);
+    this.training = true;
+    this.phase = 'combat';
+    this.trainingDone = new Set();
+    this.shotsFired = 0;
+    this.player.invincible = 999;
+    this.barrels = [];
+    this.enemies = [];
+    this.queue = [];
+    this.spawnTrainingDummies();
+  }
+  endTraining() {
+    this.training = false;
+    this.trainingDone = new Set();
+    this.phase = 'menu';
+  }
+  private spawnTrainingDummies() {
+    const slots = [
+      { x: 470, y: 300 },
+      { x: 820, y: 320 },
+      { x: 640, y: 560 },
+      { x: 905, y: 540 },
+    ];
+    for (const s of slots)
+      this.enemies.push({
+        ...s,
+        id: this.nextId++,
+        kind: 'crawler',
+        hp: 140,
+        maxHp: 140,
+        radius: 20,
+        angle: 0,
+        cooldown: 100,
+        slow: 0,
+        flash: 0,
+        age: 10,
+        windup: 0,
+        target: { ...this.player },
+        charge: 0,
+        home: { ...s },
+      });
   }
   private prepareRoom() {
     this.enemies = [];
@@ -163,8 +223,17 @@ export class Simulation {
       return;
     }
     this.levelIndex++;
-    this.phase = 'combat';
+    // Entering the arena: pause behind the boss-selection window until a nemesis is picked.
+    this.phase = this.isLastLevel ? 'bossSelect' : 'combat';
     this.prepareRoom();
+  }
+  /** Confirm the final boss from the pre-arena selection window. */
+  chooseBoss(id: BossId) {
+    if (this.phase !== 'bossSelect') return;
+    this.bossId = id;
+    this.phase = 'combat';
+    this.hint = { key: 'stateReady' };
+    this.player.invincible = 1.2;
   }
   chooseSkill(id: SkillId) {
     if (this.phase !== 'upgrade' || !this.options.some((s) => s.id === id)) return;
@@ -189,6 +258,15 @@ export class Simulation {
   tick(dt: number, input: InputState = EMPTY_INPUT) {
     if (this.paused || !['combat', 'exit'].includes(this.phase)) return;
     dt = clamp(dt, 0, 0.05);
+    // Hitstop: killing blows freeze the world for a few frames so the hit lands.
+    if (this.freeze > 0) {
+      this.freeze = Math.max(0, this.freeze - dt);
+      return;
+    }
+    if (this.training) {
+      this.player.invincible = Math.max(this.player.invincible, 999);
+      this.player.hp = this.player.maxHp;
+    }
     if (this.phase === 'combat') this.elapsed += dt;
     this.comboTime = Math.max(0, this.comboTime - dt);
     if (this.comboTime === 0) this.combo = 0;
@@ -197,7 +275,7 @@ export class Simulation {
     this.pickups.forEach((p) => (p.age += dt));
     this.updateAlly(dt);
     if (this.phase === 'combat') {
-      this.updateWaves(dt);
+      if (!this.training) this.updateWaves(dt);
       this.flowTimer -= dt;
       if (this.flowTimer <= 0) {
         this.buildFlow();
@@ -207,7 +285,7 @@ export class Simulation {
       this.updateBullets(dt);
       this.cleanupEnemies();
     }
-    if (this.player.hp <= 0) {
+    if (!this.training && this.player.hp <= 0) {
       this.player.hp = 0;
       this.phase = 'lost';
       this.hint = { key: 'runInterrupted' };
@@ -225,7 +303,10 @@ export class Simulation {
         p.ammo = this.weapon.magazine;
       }
     }
-    if (input.reload) this.reload();
+    if (input.reload) {
+      this.reload();
+      if (this.training) this.trainingDone.add('reload');
+    }
     const move = normalize(input.move);
     p.moving = move.x !== 0 || move.y !== 0;
     if (input.dash && p.dashCooldown <= 0) {
@@ -234,6 +315,7 @@ export class Simulation {
       p.dashCooldown = this.skills.includes('nova') ? 1.65 : 2.2;
       p.invincible = 0.32;
       this.emit('dash', p, { color: 0xfab583 });
+      if (this.training) this.trainingDone.add('dash');
       if (this.skills.includes('nova')) this.explode({ ...p }, 145, 65, false);
     }
     if (p.dashRemaining > 0) {
@@ -243,6 +325,7 @@ export class Simulation {
     if (input.firing && this.phase === 'combat' && p.shotCooldown <= 0 && p.reloadRemaining <= 0) {
       if (p.ammo > 0) {
         this.fire(p, p.angle, p.weapon, 'player');
+        if (this.training) this.trainingDone.add('shoot');
         p.ammo--;
         p.shotCooldown = this.weapon.interval / (this.skills.includes('haste') ? 1.25 : 1);
       } else this.reload();
@@ -287,6 +370,25 @@ export class Simulation {
     const ny = clamp(p.y + d.y * amount, edge, WORLD.height - edge);
     if (!this.level.obstacles.some((b) => circleRect({ x: p.x, y: ny }, r, b))) p.y = ny;
   }
+  /** Enemy steering. If cover blocks the way, slide along it instead of pressing. */
+  private enemyMove(e: Enemy, d: Vec, speed: number, dt: number) {
+    const before = { x: e.x, y: e.y };
+    this.move(e, d, speed * dt, e.radius);
+    if (distance(e, before) >= 0.3 || speed <= 0) {
+      e.stuck = 0;
+      return;
+    }
+    e.stuck = (e.stuck ?? 0) + dt;
+    if (e.stuck > 0.25) {
+      // Pressed against cover: slide along it. Try both tangents so we never
+      // pick the side that pushes deeper into the block.
+      for (const side of e.id % 2 === 0 ? [1, -1] : [-1, 1]) {
+        const from = { x: e.x, y: e.y };
+        this.move(e, { x: -d.y * side, y: d.x * side }, speed * dt, e.radius);
+        if (distance(e, from) >= 0.3) break;
+      }
+    }
+  }
   private fire(p: Vec, angle: number, id: WeaponId, owner: 'player' | 'ally') {
     const w = WEAPONS[id],
       isPlayer = owner === 'player',
@@ -325,6 +427,7 @@ export class Simulation {
         { x: p.x + Math.cos(angle) * 30, y: p.y + Math.sin(angle) * 30 },
         { color: isPlayer ? w.color : 0x99ccbe, value: angle, loud: isPlayer && !isFlame },
       );
+    if (isPlayer) this.shotsFired++;
   }
   private updateAlly(dt: number) {
     if (!this.squad) return;
@@ -386,7 +489,7 @@ export class Simulation {
       );
     }
   }
-  private spawn(kind: EnemyKind) {
+  private spawn(token: string) {
     const points = [
       { x: 135, y: 160 },
       { x: 640, y: 115 },
@@ -397,15 +500,23 @@ export class Simulation {
     ];
     let p = points[Math.floor(this.random() * points.length)];
     if (distance(p, this.player) < 270) p = points[(points.indexOf(p) + 3) % points.length];
-    if (kind === 'boss') p = { x: 640, y: 190 };
-    const hp = HP[kind] * (this.squad ? 1.2 : 1);
+    if (token.startsWith('boss')) p = { x: 640, y: 190 };
+    this.spawnAt(p, token);
+  }
+  /** Shared enemy factory. A trailing "!" on the token marks an elite variant. */
+  private spawnAt(p: Vec, token: string, forcedSkin?: EnemySkin) {
+    const elite = token.endsWith('!');
+    const kind = token.replace(/!$/, '') as EnemyKind;
+    const bossCfg =
+      kind === 'boss' ? BOSSES.find((b) => b.id === (this.bossId ?? 'flower'))! : null;
+    const hp = (bossCfg ? bossCfg.hp : HP[kind]) * (this.squad ? 1.2 : 1) * (elite ? 4 : 1);
     this.enemies.push({
       ...p,
       id: this.nextId++,
       kind,
       hp,
       maxHp: hp,
-      radius: RADII[kind],
+      radius: RADII[kind] * (elite ? 1.35 : 1),
       angle: 0,
       cooldown: 1.1 + this.random(),
       slow: 0,
@@ -414,14 +525,163 @@ export class Simulation {
       windup: 0,
       target: { ...this.player },
       charge: 0,
+      skin:
+        forcedSkin ??
+        (kind === 'boss'
+          ? undefined
+          : this.levelIndex < 3
+            ? SKINS[this.levelIndex]
+            : SKINS[Math.floor(this.random() * SKINS.length)]),
+      bossId: bossCfg?.id,
+      elite,
+      atk: 0,
     });
+  }
+  /** Bosses call reinforcements. Capped so swarms stay readable. */
+  private summon(from: Vec, count: number, kind: EnemyKind, skin: EnemySkin) {
+    const alive = this.enemies.filter((e) => e.hp > 0).length;
+    const n = Math.min(count, Math.max(0, 9 - alive));
+    for (let i = 0; i < n; i++) {
+      const a = (i / Math.max(1, n)) * Math.PI * 2 + this.random();
+      const p = {
+        x: clamp(from.x + Math.cos(a) * 95, 110, 1170),
+        y: clamp(from.y + Math.sin(a) * 95, 120, 690),
+      };
+      if (this.level.obstacles.some((b) => circleRect(p, 22, b))) continue;
+      const hp = HP[kind] * 0.8;
+      this.enemies.push({
+        ...p,
+        id: this.nextId++,
+        kind,
+        hp,
+        maxHp: hp,
+        radius: RADII[kind],
+        angle: 0,
+        cooldown: 1.1,
+        slow: 0,
+        flash: 0,
+        age: 0,
+        windup: 0,
+        target: { ...this.player },
+        charge: 0,
+        skin,
+        atk: 0,
+      });
+      this.emit('wave', p, { text: undefined });
+    }
+  }
+  /** Doll boss: blink to a flank around the player, clear of cover. */
+  private bossBlink(e: Enemy) {
+    for (let tries = 0; tries < 8; tries++) {
+      const a = this.random() * Math.PI * 2,
+        d = 210 + this.random() * 90;
+      const p = {
+        x: clamp(this.player.x + Math.cos(a) * d, 110, 1170),
+        y: clamp(this.player.y + Math.sin(a) * d, 120, 690),
+      };
+      if (!this.level.obstacles.some((b) => circleRect(p, e.radius, b))) {
+        e.x = p.x;
+        e.y = p.y;
+        this.emit('dash', e, { color: 0xe6c9d8 });
+        return;
+      }
+    }
+  }
+  private enemyFan(
+    e: Enemy,
+    count: number,
+    spread: number,
+    speed: number,
+    damage = 10,
+    radius = 6,
+    color = 0xf19bac,
+  ) {
+    for (let i = 0; i < count; i++)
+      this.enemyBullet(
+        e,
+        e.angle + (count > 1 ? (i / (count - 1) - 0.5) * spread * 2 : 0),
+        speed,
+        damage,
+        radius,
+        color,
+      );
+  }
+  private enemyRadial(e: Enemy, count: number, speed: number) {
+    for (let i = 0; i < count; i++)
+      this.enemyBullet(e, (i / count) * Math.PI * 2 + e.age * 0.3, speed);
+    this.emit('explosion', e, { color: 0xe89aaa, value: 65 });
+  }
+  /** Per-boss attack scripts, executed when the windup finishes. */
+  private bossAttack(e: Enemy) {
+    const phase2 = e.hp < e.maxHp / 2;
+    e.atk = (e.atk ?? 0) + 1;
+    switch (e.bossId) {
+      case 'zombie':
+        this.summon(e, phase2 ? 3 : 2, 'crawler', 'spider');
+        if (phase2) this.enemyFan(e, 6, 0.55, 225);
+        e.cooldown = phase2 ? 1.9 : 2.6;
+        break;
+      case 'doll':
+        this.bossBlink(e);
+        this.enemyFan(e, phase2 ? 9 : 6, phase2 ? 0.5 : 0.35, 265, 9, 4, 0xe8d8e2);
+        e.cooldown = phase2 ? 1.5 : 2.2;
+        break;
+      case 'scorpion':
+        if (e.atk % 2 === 1) {
+          e.charge = 0.55;
+          this.emit('dash', e, { color: 0xc4cfe0 });
+        } else this.enemyFan(e, 5, 0.4, 240);
+        if (phase2 && e.atk % 3 === 0) this.enemyRadial(e, 14, 190);
+        e.cooldown = phase2 ? 1.8 : 2.4;
+        break;
+      case 'crow':
+        this.summon(e, phase2 ? 3 : 2, 'crawler', 'bat');
+        this.enemyFan(e, phase2 ? 8 : 5, 0.9, 205);
+        e.cooldown = phase2 ? 1.7 : 2.5;
+        break;
+      case 'flower':
+      default:
+        if (e.atk % 3 === 0) this.summon(e, 2, 'crawler', 'spider');
+        if (e.atk % 2 === 0 || phase2) this.enemyRadial(e, phase2 ? 18 : 12, phase2 ? 195 : 165);
+        else this.enemyFan(e, 5, 0.5, 210);
+        e.cooldown = phase2 ? 1.7 : 2.4;
+    }
   }
   private updateEnemies(dt: number) {
     for (const e of this.enemies) {
       if (e.hp <= 0) continue;
+      if (this.training) {
+        e.age += dt;
+        e.flash = Math.max(0, e.flash - dt);
+        if (e.knock) {
+          const speed = Math.hypot(e.knock.x, e.knock.y);
+          if (speed > 1) {
+            this.move(e, normalize(e.knock), speed * dt, e.radius);
+            const decay = Math.exp(-dt * 11);
+            e.knock.x *= decay;
+            e.knock.y *= decay;
+          } else {
+            e.knock.x = 0;
+            e.knock.y = 0;
+          }
+        }
+        continue;
+      }
       e.age += dt;
       e.flash = Math.max(0, e.flash - dt);
       e.slow = Math.max(0, e.slow - dt);
+      if (e.knock) {
+        const speed = Math.hypot(e.knock.x, e.knock.y);
+        if (speed > 1) {
+          this.move(e, normalize(e.knock), speed * dt, e.radius);
+          const decay = Math.exp(-dt * 11);
+          e.knock.x *= decay;
+          e.knock.y *= decay;
+        } else {
+          e.knock.x = 0;
+          e.knock.y = 0;
+        }
+      }
       if (e.age < 0.7) continue;
       const d = distance(e, this.player);
       e.angle = Math.atan2(this.player.y - e.y, this.player.x - e.x);
@@ -434,21 +694,14 @@ export class Simulation {
             e.charge = 0.5;
             this.emit('dash', e, { color: 0xe7a396 });
           }
-          if (e.kind === 'boss') {
-            const phase = e.hp < e.maxHp / 2;
-            const count = phase ? 18 : 12;
-            for (let i = 0; i < count; i++)
-              this.enemyBullet(e, (i / count) * Math.PI * 2 + e.age * 0.3, phase ? 195 : 165);
-            e.cooldown = phase ? 1.6 : 2.5;
-            this.emit('explosion', e, { color: 0xe89aaa, value: 65 });
-          }
+          if (e.kind === 'boss') this.bossAttack(e);
         }
       } else if (e.charge > 0) {
-        this.move(e, normalize({ x: e.target.x - e.x, y: e.target.y - e.y }), 470 * dt, e.radius);
+        this.enemyMove(e, normalize({ x: e.target.x - e.x, y: e.target.y - e.y }), 470, dt);
         e.charge -= dt;
       } else if (e.kind === 'spitter') {
         if (d > 310 || !this.lineClear(e, this.player))
-          this.move(e, this.directionTo(e, this.player), 70 * slow * dt, e.radius);
+          this.enemyMove(e, this.directionTo(e, this.player), 70 * slow, dt);
         else if (d < 185)
           this.move(
             e,
@@ -465,14 +718,18 @@ export class Simulation {
         if (e.cooldown <= 0 && d < 450 && this.lineClear(e, this.player)) {
           e.windup = 0.85;
           e.target = { ...this.player };
-          e.cooldown = 3.6;
-        } else this.move(e, this.directionTo(e, this.player), 62 * slow * dt, e.radius);
+          e.cooldown = e.elite ? 2.3 : 3.6;
+        } else this.enemyMove(e, this.directionTo(e, this.player), 62 * slow, dt);
       } else if (e.kind === 'boss') {
         if (e.cooldown <= 0) {
           e.windup = 1.0;
           e.target = { ...this.player };
         }
-        if (d > 220) this.move(e, this.directionTo(e, this.player), 26 * slow * dt, e.radius);
+        const stationary = e.bossId === 'flower';
+        const enraged = e.bossId === 'zombie' && e.hp < e.maxHp / 2;
+        const speed = (e.bossId === 'crow' ? 38 : 26) * (enraged ? 1.8 : 1);
+        if (!stationary && d > 220)
+          this.enemyMove(e, this.directionTo(e, this.player), speed * slow, dt);
       } else
         this.move(
           e,
@@ -486,7 +743,7 @@ export class Simulation {
           min = e.radius + other.radius - 3;
         if (dist < min && dist > 0) {
           const n = normalize({ x: e.x - other.x, y: e.y - other.y });
-          this.move(e, n, 35 * dt, e.radius);
+          this.enemyMove(e, n, 35, dt);
           this.move(other, { x: -n.x, y: -n.y }, 35 * dt, other.radius);
         }
       }
@@ -502,18 +759,25 @@ export class Simulation {
       }
     }
   }
-  private enemyBullet(e: Enemy, a: number, speed: number) {
+  private enemyBullet(
+    e: Enemy,
+    a: number,
+    speed: number,
+    damage = 10,
+    radius = 6,
+    color = 0xf19bac,
+  ) {
     this.bullets.push({
       id: this.nextId++,
       x: e.x + Math.cos(a) * (e.radius + 8),
       y: e.y + Math.sin(a) * (e.radius + 8),
       vx: Math.cos(a) * speed,
       vy: Math.sin(a) * speed,
-      damage: 10,
+      damage,
       ttl: 5,
       enemy: true,
-      radius: 6,
-      color: 0xf19bac,
+      radius,
+      color,
       pierce: 0,
       hits: new Set(),
       owner: 'enemy',
@@ -558,6 +822,7 @@ export class Simulation {
           continue;
         b.hits.add(e.id);
         this.damageEnemy(e, b.damage, b.color);
+        this.knockback(e, b.vx, b.vy, 190);
         if (b.owner === 'player') {
           if (this.skills.includes('cryo')) e.slow = 1.8;
           this.hitCount++;
@@ -570,7 +835,7 @@ export class Simulation {
                 .sort((a, c) => distance(source, a) - distance(source, c))[0];
               if (!t) break;
               this.emit('chain', source, { target: { x: t.x, y: t.y }, color: 0xb3eaf2 });
-              this.damageEnemy(t, 24, 0xb3eaf2);
+              this.damageEnemy(t, 24, 0xb3eaf2, 'chain');
               hit.add(t.id);
               source = t;
             }
@@ -586,15 +851,29 @@ export class Simulation {
     this.bullets = this.bullets.filter((b) => b.ttl > 0);
     this.barrels = this.barrels.filter((b) => b.hp > 0);
   }
-  private damageEnemy(e: Enemy, damage: number, color: number) {
+  private damageEnemy(e: Enemy, damage: number, color: number, cause: KillCause = 'bullet') {
     e.hp -= damage;
     e.flash = 0.08;
+    e.cause = cause;
     this.emit('hit', e, { color, value: Math.round(damage) });
+  }
+  /** Pushes an enemy along a direction. Heavier kinds resist more. */
+  private knockback(e: Enemy, dx: number, dy: number, force: number) {
+    const len = Math.hypot(dx, dy);
+    if (len < 0.001) return;
+    const mass =
+      e.kind === 'crawler' ? 1 : e.kind === 'spitter' ? 1.3 : e.kind === 'brute' ? 2.8 : 7;
+    const k = (e.knock ??= { x: 0, y: 0 });
+    k.x += (dx / len) * (force / mass);
+    k.y += (dy / len) * (force / mass);
   }
   private explode(p: Vec, r: number, damage: number, hurtPlayer: boolean) {
     this.emit('explosion', p, { value: r, color: 0xf7b280 });
     for (const e of this.enemies)
-      if (e.hp > 0 && distance(p, e) < r + e.radius) this.damageEnemy(e, damage, 0xf7b280);
+      if (e.hp > 0 && distance(p, e) < r + e.radius) {
+        this.damageEnemy(e, damage, 0xf7b280, 'explosion');
+        this.knockback(e, e.x - p.x, e.y - p.y, 340);
+      }
     if (hurtPlayer && distance(p, this.player) < r) this.hurt(18);
     for (const b of this.barrels)
       if (b.hp > 0 && b !== p && distance(p, b) < r) {
@@ -612,13 +891,38 @@ export class Simulation {
   }
   private cleanupEnemies() {
     for (const e of this.enemies.filter((e) => e.hp <= 0 && !e.deathHandled)) {
+      if (this.training && e.home) {
+        e.hp = e.maxHp;
+        e.x = e.home.x;
+        e.y = e.home.y;
+        e.flash = 0;
+        e.knock = undefined;
+        e.stuck = 0;
+        e.charge = 0;
+        e.windup = 0;
+        e.deathHandled = false;
+        continue;
+      }
       e.deathHandled = true;
       this.kills++;
       this.roomKills++;
       this.combo++;
       this.comboTime = 3.2;
       this.bestCombo = Math.max(this.bestCombo, this.combo);
-      this.emit('kill', e, { color: e.kind === 'boss' ? 0xe8a1b4 : 0x94c598, value: e.radius });
+      this.emit('kill', e, {
+        color: e.kind === 'boss' ? 0xe8a1b4 : 0x94c598,
+        value: e.radius,
+        kind: e.kind,
+        cause: e.cause ?? 'bullet',
+        loud: e.kind === 'brute' || e.kind === 'boss',
+      });
+      // Heavy kills stop the world longer; regular kills only flinch.
+      this.freeze = Math.max(this.freeze, e.kind === 'brute' || e.kind === 'boss' ? 0.09 : 0.045);
+      // Elite bats split into a pair of screechers when killed.
+      if (e.elite && e.skin === 'bat' && !this.training) {
+        this.spawnAt({ x: clamp(e.x - 26, 100, 1180), y: e.y }, 'crawler', 'bat');
+        this.spawnAt({ x: clamp(e.x + 26, 100, 1180), y: e.y }, 'crawler', 'bat');
+      }
       if (this.skills.includes('leech'))
         this.player.hp = Math.min(this.player.maxHp, this.player.hp + 3);
       if (this.random() < 0.16)

@@ -1,4 +1,69 @@
-import type { Level, Skill, Weapon, WeaponId } from './types';
+import type { BossConfig, Level, Skill, Weapon, WeaponId } from './types';
+
+/** Selectable final bosses. Cards are shuffled before every choice. */
+export const BOSSES: BossConfig[] = [
+  {
+    id: 'flower',
+    glyph: '🌻',
+    name: { zh: '食人花', en: 'MAN-EATER BLOOM' },
+    tag: { zh: '弹幕 · 召唤', en: 'BARRAGE · SUMMON' },
+    description: {
+      zh: '扎根不动的巨型食人花。扇形吐出种子弹幕，重伤后召唤藤蔓小怪并释放尖刺环。',
+      en: 'A rooted giant bloom. Fans out seed barrages; when hurt it sprouts vines and thorn rings.',
+    },
+    color: 0xd977a4,
+    hp: 1150,
+    stationary: true,
+  },
+  {
+    id: 'zombie',
+    glyph: '🧟',
+    name: { zh: '僵尸之王', en: 'PLAGUE SOVEREIGN' },
+    tag: { zh: '召唤 · 压制', en: 'SUMMON · SWARM' },
+    description: {
+      zh: '缓慢逼近的腐烂君王，不断唤起僵尸潮。半血后狂暴加速并吐出腐毒扇面。',
+      en: 'A rotting sovereign that shambles forward and raises zombie tides. Enrages below half health.',
+    },
+    color: 0x8fae72,
+    hp: 1350,
+  },
+  {
+    id: 'doll',
+    glyph: '🪆',
+    name: { zh: '洋娃娃', en: 'PORCELAIN DOLL' },
+    tag: { zh: '机动 · 诡变', en: 'MOBILITY · TRICKERY' },
+    description: {
+      zh: '会瞬移的瓷器娃娃，从不可思议的角度射出缝衣针。半血后针雨翻倍。',
+      en: 'A teleporting porcelain doll firing needles from impossible angles. Doubles the storm below half health.',
+    },
+    color: 0xd8b6c4,
+    hp: 1050,
+  },
+  {
+    id: 'scorpion',
+    glyph: '🦂',
+    name: { zh: '机械巨蝎', en: 'ARC SCORPION' },
+    tag: { zh: '冲锋 · 横扫', en: 'CHARGE · SWEEP' },
+    description: {
+      zh: '合金甲壳的巨蝎：尾针锁定后全速冲撞，重伤后钻地突袭并甩出毒刺环。',
+      en: 'An alloy-armored scorpion that locks on and charges; wounded, it burrows and flings venom rings.',
+    },
+    color: 0xa8b4c4,
+    hp: 1250,
+  },
+  {
+    id: 'crow',
+    glyph: '🐦',
+    name: { zh: '乌鸦稻草人', en: 'CROW SCARECROW' },
+    tag: { zh: '空袭 · 场控', en: 'AIR RAID · ZONE' },
+    description: {
+      zh: '麦田里的守望者放出一群群乌鸦，凝视前方洒下恐惧弹幕。半血后乌鸦不歇。',
+      en: 'The watcher of the fields sends crow flocks and dread barrages. The flock never rests below half health.',
+    },
+    color: 0x9a8fb8,
+    hp: 1200,
+  },
+];
 
 export const WORLD = { width: 1280, height: 800, inset: 62 };
 export const WEAPONS: Record<WeaponId, Weapon> = {
@@ -103,14 +168,15 @@ export const SKILLS: Skill[] = [
 ];
 export const LEVELS: Level[] = [
   {
-    name: { zh: '孢子中庭', en: 'THE OVERGROWN ATRIUM' },
-    code: 'THE OVERGROWN ATRIUM',
+    name: { zh: '低语草野', en: 'THE WHISPERING MEADOW' },
+    code: 'THE WHISPERING MEADOW',
     subtitle: {
-      zh: '清除感染群，重新接通传送门',
-      en: 'Clear the infected swarm and reconnect the gate',
+      zh: '蛛群在草丛深处结网，清出一条路',
+      en: 'The webs run deep in the grass. Cut a path through',
     },
-    accent: 0x91c9ac,
-    floor: 0x263936,
+    accent: 0x9fd08c,
+    floor: 0x2e4626,
+    theme: 'grass',
     obstacles: [
       { x: 287, y: 232, w: 132, h: 66 },
       { x: 856, y: 484, w: 136, h: 68 },
@@ -128,14 +194,15 @@ export const LEVELS: Level[] = [
     ],
   },
   {
-    name: { zh: '冷却回廊', en: 'THE COOLANT PASSAGE' },
-    code: 'THE COOLANT PASSAGE',
+    name: { zh: '巨木树洞', en: 'THE HOLLOW GIANT' },
+    code: 'THE HOLLOW GIANT',
     subtitle: {
-      zh: '利用掩体，突破重甲防线',
-      en: 'Use cover and break through the armored line',
+      zh: '蝠群在年轮间盘旋，别被音波钉在原地',
+      en: 'Bats swarm between the rings. Do not get pinned by their cries',
     },
-    accent: 0x94bfd1,
-    floor: 0x26363e,
+    accent: 0xd8a86b,
+    floor: 0x3d2c1c,
+    theme: 'hollow',
     obstacles: [
       { x: 355, y: 175, w: 85, h: 140 },
       { x: 355, y: 492, w: 85, h: 135 },
@@ -149,29 +216,20 @@ export const LEVELS: Level[] = [
       { x: 753, y: 347 },
     ],
     waves: [
-      ['crawler', 'spitter', 'spitter', 'brute', 'crawler', 'crawler', 'spitter', 'crawler'],
-      [
-        'brute',
-        'spitter',
-        'crawler',
-        'brute',
-        'spitter',
-        'crawler',
-        'spitter',
-        'crawler',
-        'crawler',
-      ],
+      ['crawler', 'spitter', 'spitter', 'crawler', 'crawler', 'spitter', 'crawler'],
+      ['brute', 'spitter', 'crawler', 'brute', 'crawler', 'spitter', 'crawler', 'crawler'],
     ],
   },
   {
-    name: { zh: '排热竖井', en: 'THE VENT SHAFT' },
-    code: 'THE VENT SHAFT',
+    name: { zh: '月面前哨', en: 'LUNAR OUTPOST' },
+    code: 'LUNAR OUTPOST',
     subtitle: {
-      zh: '穿越排气区，别让重甲冲锋把你逼进死角',
-      en: 'Cross the exhaust gauntlet and never let a charge corner you',
+      zh: '低重力区的异形巢穴，掩体后就是真空',
+      en: 'An alien nest under low gravity. Cover is all that keeps you breathing',
     },
-    accent: 0xd9a273,
-    floor: 0x3a2e26,
+    accent: 0x8fb6e8,
+    floor: 0x232c40,
+    theme: 'moon',
     obstacles: [
       { x: 232, y: 205, w: 128, h: 62 },
       { x: 918, y: 205, w: 128, h: 62 },
@@ -201,14 +259,15 @@ export const LEVELS: Level[] = [
     ],
   },
   {
-    name: { zh: '反应堆之心', en: 'HEART OF THE REACTOR' },
-    code: 'HEART OF THE REACTOR',
+    name: { zh: '万像角斗场', en: 'PANOPTES ARENA' },
+    code: 'PANOPTES ARENA',
     subtitle: {
-      zh: '击败孢核守卫，终止感染',
-      en: 'Defeat the Spore Warden and end the infection',
+      zh: '全部猎手齐聚于此——选定你的宿敌',
+      en: 'Every hunter gathers here. Choose your nemesis',
     },
-    accent: 0xda999b,
-    floor: 0x3b3037,
+    accent: 0xc49ae0,
+    floor: 0x33233c,
+    theme: 'arena',
     obstacles: [
       { x: 282, y: 248, w: 84, h: 95 },
       { x: 910, y: 248, w: 84, h: 95 },
@@ -220,8 +279,8 @@ export const LEVELS: Level[] = [
       { x: 858, y: 525 },
     ],
     waves: [
-      ['brute', 'crawler', 'spitter', 'crawler', 'spitter', 'brute'],
-      ['boss', 'crawler', 'crawler', 'spitter', 'crawler'],
+      ['crawler!', 'spitter!', 'brute!', 'crawler!', 'spitter!', 'crawler!'],
+      ['boss', 'crawler', 'spitter', 'crawler'],
     ],
   },
 ];
