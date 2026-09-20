@@ -114,6 +114,7 @@ export const TRANSLATIONS = {
     moduleFound: '发现技能模块 · 靠近后按 E 拾取',
     healthPickup: '+25 生命',
     guideButton: '指南',
+    howToPlay: '玩法说明',
     guideTitle: '新兵简报',
     guideClose: '关闭',
     guideStart: '开始行动',
@@ -156,6 +157,7 @@ export const TRANSLATIONS = {
     trainDone: '训练完成！你已掌握基础操作。',
     trainExit: '结束训练',
     roomShootHint: '按住鼠标左键开火',
+    roomDashHint: '开火后，按 SPACE 闪避躲避敌人',
     roomPortalHint: '前往右侧传送门',
   },
   en: {
@@ -269,6 +271,7 @@ export const TRANSLATIONS = {
     moduleFound: 'SKILL MODULE FOUND · APPROACH AND PRESS E',
     healthPickup: '+25 HEALTH',
     guideButton: 'GUIDE',
+    howToPlay: 'HOW TO PLAY',
     guideTitle: 'ROOKIE BRIEF',
     guideClose: 'CLOSE',
     guideStart: 'BEGIN OPERATION',
@@ -316,6 +319,7 @@ export const TRANSLATIONS = {
     trainDone: 'TRAINING COMPLETE! You have the basics down.',
     trainExit: 'EXIT TRAINING',
     roomShootHint: 'HOLD LEFT MOUSE TO FIRE',
+    roomDashHint: 'AFTER FIRING, PRESS SPACE TO DASH OUT OF DANGER',
     roomPortalHint: 'GO TO THE PORTAL ON THE RIGHT',
   },
 } as const;
