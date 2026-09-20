@@ -66,7 +66,7 @@ npm.cmd run dev
 
 在浏览器打开 **http://localhost:5173**。Windows 终端默认用 PowerShell 7；macOS/Linux 把 `npm.cmd` 换成 `npm`。Windows 也可以双击 [`ember-protocol/启动游戏.cmd`](ember-protocol/启动游戏.cmd)。
 
-`localhost` 是每个人自己的本机地址，不是线上发布地址或联机房间。本仓库当前提供源码与本地试玩，没有在这里宣称已部署的公网版本。
+`localhost` 是每个人自己的本机地址，不是线上发布地址或联机房间。**在线试玩：[keying-s.github.io/github-collaboration-homework](https://keying-s.github.io/github-collaboration-homework/)**（GitHub Pages 自动部署，随 main 更新；游戏为单机+AI 战友，没有真人联机）。
 
 | 操作                      | 按键            |
 | ------------------------- | --------------- |
