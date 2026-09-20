@@ -120,18 +120,14 @@ test('the starting weapon choice configures the whole run and refills its own ma
   assert.equal(flamerRun.player.ammo, WEAPONS.flamer.magazine);
   const e = enemy(760, 445);
   flamerRun.enemies = [e];
-  step(flamerRun, 0.25, { firing: true });
-  assert.ok(flamerRun.player.ammo < WEAPONS.flamer.magazine);
-  assert.ok(e.hp < 500);
+  // The flamer is a cone field: one damage tick per second, 20 fuel per tick.
+  step(flamerRun, 1.2, { firing: true });
+  assert.equal(flamerRun.player.ammo, WEAPONS.flamer.magazine - 20);
+  assert.equal(e.hp, 500 - WEAPONS.flamer.damage);
+  assert.ok(flamerRun.flameFx.length > 0, 'spraying must emit visual flame particles');
   assert.ok(
-    flamerRun.bullets.every((b) => b.enemy || b.flame),
-    'flamer projectiles must be flagged as flame particles',
-  );
-  // Flame particles die at the flamer's short range instead of crossing the arena.
-  assert.ok(
-    flamerRun.bullets.every(
-      (b) => b.enemy || Math.hypot(b.vx, b.vy) * b.ttl <= WEAPONS.flamer.range,
-    ),
+    flamerRun.bullets.every((b) => b.enemy),
+    'flame damage must not ride on bullets',
   );
   flamerRun.tick(1 / 60, { ...idle, reload: true });
   assert.ok(flamerRun.player.reloadRemaining > 0);
@@ -165,7 +161,7 @@ test('every axis pick DOUBLES the stat: 2^stacks per weapon mapping (#49)', () =
   assert.ok(Math.abs(rifle.damage - WEAPONS.rifle.damage * 2) < 1e-9);
   assert.ok(Math.abs(rifle.interval - WEAPONS.rifle.interval / 2) < 1e-9);
   assert.equal(rifle.magazine, WEAPONS.rifle.magazine * 2);
-  assert.equal(m.pierceCount, 2);
+  assert.equal(m.pierceCount, 1);
   // flamer: shots double the cone, pierce doubles range, never bullet-pierce
   const flamerRun = new Simulation(seededRandom(5));
   flamerRun.start(false, 'flamer');
@@ -238,7 +234,8 @@ test('all six waves, boss, modules and exits form a complete three-room campaign
   m.player.hp = 100000;
   let reachedBoss = false,
     roomExits = 0;
-  for (let frame = 0; frame < 60 * 360 && m.phase !== 'won'; frame++) {
+  // 60*600: the bot can neither aim nor move; humans outperform it several fold.
+  for (let frame = 0; frame < 60 * 600 && m.phase !== 'won'; frame++) {
     if (m.phase === 'upgrade') {
       m.chooseUpgrade(m.options[0].id);
       m.player.x = 640;
@@ -360,32 +357,22 @@ test('auto-offers draw two distinct axes and the whole pool is reachable', () =>
   assert.equal(seen.size, 5);
 });
 
-test('knockback pushes hit enemies back without wedging them into cover', () => {
+test('bullet hits do not push enemies around (#49 follow-up)', () => {
   const m = game();
   m.waveDelay = 100;
-  const e = enemy(760, 445, 'crawler');
+  // A spitter at mid range with clear line of sight holds position.
+  const e = enemy(860, 445, 'spitter');
   e.hp = 100000;
   e.maxHp = 100000;
   e.cooldown = 1000000;
   m.enemies = [e];
   const startX = e.x;
-  let pushedBack = false;
-  for (let frame = 0; frame < 180; frame++) {
+  for (let frame = 0; frame < 180; frame++)
     m.tick(1 / 60, { ...idle, aim: { x: e.x, y: e.y }, firing: true });
-    assert.ok(
-      !m.level.obstacles.some((b) => circleRect(e, e.radius - 0.5, b)),
-      `knockback pushed an enemy into cover at ${e.x},${e.y}`,
-    );
-    assert.ok(
-      e.x >= WORLD.inset - 1 &&
-        e.x <= WORLD.width - WORLD.inset + 1 &&
-        e.y >= WORLD.inset - 1 &&
-        e.y <= WORLD.height - WORLD.inset + 1,
-      `knockback pushed an enemy out of the arena at ${e.x},${e.y}`,
-    );
-    if (e.x > startX + 8) pushedBack = true;
-  }
-  assert.ok(pushedBack, 'a hit should visibly push the enemy along the bullet');
+  assert.ok(
+    Math.abs(e.x - startX) < 1,
+    `a stationary enemy must stay put under fire (moved ${e.x - startX}px)`,
+  );
 });
 
 test('kill hitstop is short, bounded and never accumulates across kills', () => {

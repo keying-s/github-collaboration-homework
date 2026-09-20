@@ -385,6 +385,13 @@ export class ArenaRenderer {
     // Player projectiles (including flame cones) render first so that enemy
     // bullets always stay visible above the fire — a close-range flamethrower
     // must never hide the projectiles that can hit you.
+    for (const b of m.flameFx) {
+      const v = Math.hypot(b.vx, b.vy),
+        life = Math.max(0, Math.min(1, b.ttl * 4));
+      g.fillStyle(b.color, 0.16 * life).fillCircle(b.x, b.y, 11);
+      g.fillStyle(b.color, 0.4 * life).fillCircle(b.x, b.y, 6);
+      g.fillStyle(0xffe3b0, 0.75 * life).fillCircle(b.x - (b.vx / v) * 3, b.y - (b.vy / v) * 3, 3);
+    }
     for (const b of m.bullets) {
       if (b.enemy) continue;
       if (b.flame) {

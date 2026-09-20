@@ -86,10 +86,12 @@ export const WEAPONS: Record<WeaponId, Weapon> = {
     id: 'flamer',
     name: { zh: '焚化者', en: 'INCINERATOR' },
     label: { zh: 'FL.02 / 喷火枪', en: 'FL.02 / FLAMETHROWER' },
-    description: { zh: '锥形火焰 · 贴脸洗怪', en: 'CONE OF FIRE · POINT-BLANK PURGE' },
+    description: { zh: '锥形灼烧场 · 烧穿整片', en: 'BURNING CONE · SCORCH EVERYTHING INSIDE' },
     color: 0xff8a5c,
-    damage: 7,
-    interval: 0.05,
+    // The flamer is a cone damage field: everything inside takes `damage` every
+    // `interval` seconds (rate cards halve it). Fuel burns per tick (20/tick).
+    damage: 140,
+    interval: 1,
     pellets: 1,
     spread: 0.3,
     speed: 620,
@@ -112,12 +114,15 @@ export const UPGRADES: UpgradeOption[] = [
   {
     id: 'rate',
     label: { zh: '射速 ×2', en: 'FIRE RATE ×2' },
-    effect: { zh: '开火间隔减半', en: 'Fires twice as often' },
+    effect: { zh: '开火 / 灼烧频率翻倍', en: 'Fire and burn ticks twice as often' },
   },
   {
     id: 'pierce',
     label: { zh: '穿透 ×2', en: 'PIERCE ×2' },
-    effect: { zh: '步枪穿透翻倍 · 火焰射程翻倍', en: 'Rifle pierce ×2 · flame range ×2' },
+    effect: {
+      zh: '步枪子弹获得穿透并翻倍 · 火焰射程翻倍',
+      en: 'Rifle bullets start piercing, doubling · flame range ×2',
+    },
   },
   {
     id: 'mag',

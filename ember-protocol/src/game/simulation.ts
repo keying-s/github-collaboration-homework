@@ -21,6 +21,8 @@ import type {
 } from './types';
 
 const RADII = { crawler: 20, spitter: 23, brute: 31, boss: 58 };
+/** Fuel burned per cone damage tick (#49 follow-up: flamer is a burning field, not bullets). */
+const FLAME_FUEL_PER_TICK = 20;
 const HP = { crawler: 48, spitter: 66, brute: 185, boss: 1250 };
 /** Visual theme of the regular enemies, ordered by level. */
 const SKINS: EnemySkin[] = ['spider', 'bat', 'alien'];
@@ -69,7 +71,9 @@ export class Simulation {
   private flow: number[] = [];
   private flowTimer = 0;
   offeredUpgrades: UpgradeId[] = [];
-  private flameTick = 0;
+  /** Visual-only flame particles; damage comes from cone ticks, never from these. */
+  flameFx: Bullet[] = [];
+  private flameTimer = 0;
   constructor(private random: () => number = Math.random) {
     this.prepareRoom();
   }
@@ -111,9 +115,9 @@ export class Simulation {
     };
   }
   get pierceCount() {
-    return this.player.weapon === 'rifle'
-      ? 2 ** this.upgrades.filter((u) => u === 'pierce').length
-      : 0;
+    const stacks = this.upgrades.filter((u) => u === 'pierce').length;
+    // Base rifle has NO pierce; the first card grants 1, each extra card doubles it.
+    return this.player.weapon === 'rifle' && stacks > 0 ? 2 ** (stacks - 1) : 0;
   }
   get nearestPickup() {
     return this.pickups
@@ -211,6 +215,8 @@ export class Simulation {
     this.bullets = [];
     this.events = [];
     this.pickups = [];
+    this.flameFx = [];
+    this.flameTimer = 0;
     this.queue = [];
     this.barrels = this.level.barrels.map((p) => ({ ...p, id: this.nextId++, hp: 35 }));
     Object.assign(this.player, {
@@ -352,10 +358,13 @@ export class Simulation {
     } else this.move(p, move, 245 * dt, 17);
     if (input.firing && this.phase === 'combat' && p.shotCooldown <= 0 && p.reloadRemaining <= 0) {
       if (p.ammo > 0) {
-        this.fire(p, p.angle, p.weapon, 'player');
+        if (this.player.weapon === 'flamer') this.sprayFlames(dt);
+        else {
+          this.fire(p, p.angle, 'rifle', 'player');
+          p.ammo--;
+          p.shotCooldown = this.stats.interval;
+        }
         if (this.training) this.trainingDone.add('shoot');
-        p.ammo--;
-        p.shotCooldown = this.stats.interval;
       } else this.reload();
     }
     for (const pickup of [...this.pickups]) {
@@ -405,8 +414,7 @@ export class Simulation {
   private fire(p: Vec, angle: number, id: WeaponId, owner: 'player' | 'ally') {
     const isPlayer = owner === 'player',
       // The player's shots use upgrade-adjusted stats; the ally always fires a base rifle.
-      w = isPlayer ? this.stats : WEAPONS[id],
-      isFlame = id === 'flamer';
+      w = isPlayer ? this.stats : WEAPONS[id];
     for (let i = 0; i < w.pellets; i++) {
       const a =
         angle +
@@ -422,23 +430,76 @@ export class Simulation {
         damage: w.damage * (isPlayer ? 1 : 0.48),
         ttl: w.range / w.speed,
         enemy: false,
-        radius: isFlame ? 5 : 3,
+        radius: 3,
         color: isPlayer ? w.color : 0xa5e1cf,
         pierce: isPlayer ? this.pierceCount : 0,
         hits: new Set(),
         owner,
-        flame: isFlame,
       });
     }
-    // The flamer fires ~20 particles per second; throttle its feedback events so
-    // audio and particles mark the sustained stream, not every single particle.
-    if (!isFlame || this.flameTick++ % 8 === 0)
-      this.emit(
-        'shot',
-        { x: p.x + Math.cos(angle) * 30, y: p.y + Math.sin(angle) * 30 },
-        { color: isPlayer ? w.color : 0x99ccbe, value: angle, loud: isPlayer && !isFlame },
-      );
+    this.emit(
+      'shot',
+      { x: p.x + Math.cos(angle) * 30, y: p.y + Math.sin(angle) * 30 },
+      { color: isPlayer ? w.color : 0x99ccbe, value: angle, loud: isPlayer },
+    );
     if (isPlayer) this.shotsFired++;
+  }
+  /** The flamer is a cone-shaped burning field (#49): a visual particle stream plus a
+   * damage tick every `stats.interval` seconds that hits everything inside the cone.
+   * Rate cards double the tick frequency; shots cards widen the cone (spread) and
+   * pierce cards extend the reach (range). Fuel drains per tick, not per particle. */
+  private sprayFlames(dt: number) {
+    const p = this.player,
+      w = this.stats;
+    this.flameTimer += dt;
+    for (let i = 0; i < 3; i++) this.spawnFlameFx(p, w);
+    if (this.flameTimer < w.interval) return;
+    this.flameTimer = 0;
+    p.ammo = Math.max(0, p.ammo - FLAME_FUEL_PER_TICK);
+    const inCone = (t: Vec, r: number) => {
+      const d = distance(p, t);
+      if (d > w.range + r) return false;
+      let diff = Math.abs(Math.atan2(t.y - p.y, t.x - p.x) - p.angle);
+      if (diff > Math.PI) diff = Math.PI * 2 - diff;
+      return diff <= w.spread + Math.atan2(r, Math.max(d, 1));
+    };
+    for (const e of this.enemies)
+      if (e.hp > 0 && inCone(e, e.radius) && this.lineClear(p, e))
+        this.damageEnemy(e, w.damage, 0xff8a5c);
+    for (const barrel of [...this.barrels])
+      if (barrel.hp > 0 && inCone(barrel, 20)) {
+        barrel.hp -= w.damage;
+        if (barrel.hp <= 0) this.explode(barrel, 150, 140, true);
+      }
+    this.emit(
+      'shot',
+      { x: p.x + Math.cos(p.angle) * 30, y: p.y + Math.sin(p.angle) * 30 },
+      {
+        color: 0xff8a5c,
+        value: p.angle,
+        loud: false,
+      },
+    );
+    if (p.ammo <= 0) this.reload();
+  }
+  private spawnFlameFx(p: Vec, w: Weapon) {
+    const a = this.player.angle + (this.random() - 0.5) * 2 * w.spread;
+    this.flameFx.push({
+      id: this.nextId++,
+      x: p.x + Math.cos(a) * 29,
+      y: p.y + Math.sin(a) * 29,
+      vx: Math.cos(a) * 620,
+      vy: Math.sin(a) * 620,
+      damage: 0,
+      ttl: (w.range / 620) * (0.5 + this.random() * 0.5),
+      enemy: false,
+      radius: 5,
+      color: 0xff8a5c,
+      pierce: 0,
+      hits: new Set(),
+      owner: 'player',
+      flame: true,
+    });
   }
   private updateAlly(dt: number) {
     if (!this.squad) return;
@@ -840,7 +901,6 @@ export class Simulation {
           continue;
         b.hits.add(e.id);
         this.damageEnemy(e, b.damage, b.color);
-        this.knockback(e, b.vx, b.vy, 190);
         if (b.pierce <= 0) {
           b.ttl = 0;
           break;
@@ -848,6 +908,12 @@ export class Simulation {
         b.pierce--;
       }
     }
+    for (const f of this.flameFx) {
+      f.x += f.vx * dt;
+      f.y += f.vy * dt;
+      f.ttl -= dt;
+    }
+    this.flameFx = this.flameFx.filter((f) => f.ttl > 0);
     this.bullets = this.bullets.filter((b) => b.ttl > 0);
     this.barrels = this.barrels.filter((b) => b.hp > 0);
   }
