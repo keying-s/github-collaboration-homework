@@ -93,30 +93,27 @@ export class Simulation {
       ? this.offeredUpgrades.map((id) => UPGRADES.find((u) => u.id === id)!)
       : UPGRADES.slice(0, 2);
   }
-  /** Additive upgrade axes applied to the base weapon (see docs/features/24-weapon-upgrade-redesign.md):
-   * shots widen the flamer cone by an absolute step (diminishing) or add rifle streams,
-   * pierce extends flame range or lets rifle bullets pass through enemies. */
+  /** Power-fantasy pass (#49): every axis pick DOUBLES the stat (2^stacks).
+   * Stacking one axis and spreading picks multiply total output equally, but feel
+   * completely different — extreme builds are loud and visible, balanced builds even. */
   get stats(): Weapon {
     const base = WEAPONS[this.player.weapon];
-    const n = (id: UpgradeId) => this.upgrades.filter((u) => u === id).length;
-    const shots = n('shots'),
-      dmg = n('damage'),
-      rate = n('rate'),
-      pierce = n('pierce'),
-      mag = n('mag');
+    const n = (id: UpgradeId) => 2 ** this.upgrades.filter((u) => u === id).length;
     const rifle = this.player.weapon === 'rifle';
     return {
       ...base,
-      pellets: rifle ? base.pellets + shots : base.pellets,
-      spread: rifle ? base.spread : base.spread + 0.12 * shots,
-      damage: base.damage * (1 + 0.2 * dmg),
-      interval: base.interval / (1 + 0.15 * rate),
-      range: rifle ? base.range : base.range * (1 + 0.3 * pierce),
-      magazine: Math.round(base.magazine * (1 + 0.5 * mag)),
+      pellets: rifle ? base.pellets * n('shots') : base.pellets,
+      spread: rifle ? base.spread : Math.min(base.spread * n('shots'), 1.4),
+      damage: base.damage * n('damage'),
+      interval: Math.max(base.interval / n('rate'), 0.035),
+      range: rifle ? base.range : base.range * n('pierce'),
+      magazine: Math.round(base.magazine * n('mag')),
     };
   }
   get pierceCount() {
-    return this.player.weapon === 'rifle' ? this.upgrades.filter((u) => u === 'pierce').length : 0;
+    return this.player.weapon === 'rifle'
+      ? 2 ** this.upgrades.filter((u) => u === 'pierce').length
+      : 0;
   }
   get nearestPickup() {
     return this.pickups
@@ -176,8 +173,6 @@ export class Simulation {
     this.barrels = [];
     this.enemies = [];
     this.queue = [];
-    // A practice crate teaches the E-interact drill that replaces weapon pickups.
-    this.pickups = [{ id: this.nextId++, x: 760, y: 445, kind: 'crate', age: 0 }];
     this.spawnTrainingDummies();
   }
   endTraining() {
@@ -265,10 +260,20 @@ export class Simulation {
       color: 0xade3b7,
     });
     this.offeredUpgrades = [];
-    // Crates only spawn on room clear, so the run always resumes at the exit gate.
+    // Offers only open on room clear, so the run always resumes at the exit gate.
     this.phase = 'exit';
     this.hint = { key: 'portalReady' };
     this.player.invincible = 1.2;
+  }
+  /** Two random distinct axes, stable until chosen (#49). */
+  private offerUpgrades() {
+    const pool = [...UPGRADES];
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(this.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    this.offeredUpgrades = pool.slice(0, 2).map((u) => u.id);
+    this.phase = 'upgrade';
   }
   drainEvents() {
     const e = this.events;
@@ -363,26 +368,8 @@ export class Simulation {
         });
       }
     }
-    if (input.interact) {
-      const item = this.nearestPickup;
-      if (item && distance(item, p) < 78) {
-        this.pickups = this.pickups.filter((v) => v.id !== item.id);
-        if (item.kind === 'crate' && this.training) {
-          // In the training sandbox the crate only teaches the interaction; no modal.
-          this.trainingDone.add('crate');
-          this.emit('pickup', p, { color: 0xe8b46a });
-        } else if (item.kind === 'crate') {
-          const pool = [...UPGRADES];
-          for (let i = pool.length - 1; i > 0; i--) {
-            const j = Math.floor(this.random() * (i + 1));
-            [pool[i], pool[j]] = [pool[j], pool[i]];
-          }
-          this.offeredUpgrades = pool.slice(0, 2).map((u) => u.id);
-          if (this.options.length) this.phase = 'upgrade';
-          this.emit('pickup', p, { color: 0xa5e0bd });
-        }
-      } else if (this.phase === 'exit' && distance(p, { x: 1160, y: 400 }) < 100) this.nextLevel();
-    }
+    if (input.interact && this.phase === 'exit' && distance(p, { x: 1160, y: 400 }) < 100)
+      this.nextLevel();
   }
   private reload() {
     if (this.player.reloadRemaining > 0 || this.player.ammo === this.stats.magazine) return;
@@ -500,10 +487,13 @@ export class Simulation {
       );
     } else {
       this.bullets = [];
-      this.phase = 'exit';
-      this.hint = { key: this.isLastLevel ? 'finalPortal' : 'clearPortal' };
-      if (!this.isLastLevel && this.upgrades.length < 5)
-        this.pickups.push({ id: this.nextId++, x: 640, y: 365, kind: 'crate', age: 0 });
+      if (!this.isLastLevel && this.upgrades.length < 5) {
+        // Power-fantasy pass: the choice pops straight onto the paused screen.
+        this.offerUpgrades();
+      } else {
+        this.phase = 'exit';
+        this.hint = { key: this.isLastLevel ? 'finalPortal' : 'clearPortal' };
+      }
       this.emit(
         'clear',
         { x: 640, y: 365 },
@@ -533,7 +523,11 @@ export class Simulation {
     const kind = token.replace(/!$/, '') as EnemyKind;
     const bossCfg =
       kind === 'boss' ? BOSSES.find((b) => b.id === (this.bossId ?? 'flower'))! : null;
-    const hp = (bossCfg ? bossCfg.hp : HP[kind]) * (this.squad ? 1.2 : 1) * (elite ? 4 : 1);
+    const hp =
+      (bossCfg ? bossCfg.hp : HP[kind]) *
+      (this.level.hpScale ?? 1) *
+      (this.squad ? 1.2 : 1) *
+      (elite ? 4 : 1);
     this.enemies.push({
       ...p,
       id: this.nextId++,
@@ -572,7 +566,7 @@ export class Simulation {
         y: clamp(from.y + Math.sin(a) * 95, 120, 690),
       };
       if (this.level.obstacles.some((b) => circleRect(p, 22, b))) continue;
-      const hp = HP[kind] * 0.8;
+      const hp = HP[kind] * 0.8 * (this.level.hpScale ?? 1);
       this.enemies.push({
         ...p,
         id: this.nextId++,

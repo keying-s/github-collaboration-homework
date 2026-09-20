@@ -24,8 +24,7 @@ export type StatusMessageKey =
   | 'runInterrupted'
   | 'waveIncoming'
   | 'finalPortal'
-  | 'clearPortal'
-  | 'crateFound';
+  | 'clearPortal';
 export interface LocalizedText {
   zh: string;
   en: string;
@@ -109,7 +108,7 @@ export interface Bullet extends Vec {
 }
 export interface Pickup extends Vec {
   id: number;
-  kind: 'health' | 'crate';
+  kind: 'health';
   age: number;
 }
 export interface Barrel extends Vec {
@@ -152,6 +151,8 @@ export interface Level {
   accent: number;
   floor: number;
   theme: LevelTheme;
+  /** Power-fantasy mirror: enemy HP multiplier, doubling per room (1/2/4/8). */
+  hpScale?: number;
   obstacles: Rect[];
   barrels: Vec[];
   /** A trailing "!" on a wave entry marks it as an elite. */

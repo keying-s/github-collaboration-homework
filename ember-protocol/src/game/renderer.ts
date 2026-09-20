@@ -279,24 +279,14 @@ export class ArenaRenderer {
     }
     for (const p of m.pickups) {
       const y = p.y + Math.sin(time * 2.6 + p.id) * 4,
-        color = p.kind === 'crate' ? 0xe8b46a : 0xb7e699;
+        color = 0xb7e699;
       g.fillStyle(color, 0.035).fillCircle(p.x, p.y, 44);
       g.fillStyle(color, 0.07).fillCircle(p.x, p.y, 30);
       g.lineStyle(1, color, 0.4).strokeEllipse(p.x, p.y + 15, 48, 19);
-      if (p.kind === 'crate') {
-        // Supply crate: wooden box with an amber strap, reads as "open me for gear".
-        g.fillStyle(0x241d14, 0.4).fillEllipse(p.x + 3, p.y + 16, 34, 12);
-        g.fillStyle(0x5c4a30).fillRoundedRect(p.x - 16, y - 14, 32, 28, 4);
-        g.fillStyle(0x7a5f3c).fillRoundedRect(p.x - 13, y - 11, 26, 22, 3);
-        g.fillStyle(color).fillRect(p.x - 16, y - 3, 32, 6);
-        g.lineStyle(2, 0x3a2f1e).strokeRoundedRect(p.x - 16, y - 14, 32, 28, 4);
-        g.fillStyle(0xfff1cc).fillRect(p.x - 2, y - 9, 4, 4);
-      } else {
-        g.fillStyle(0x2c5141).fillRoundedRect(p.x - 11, y - 11, 22, 22, 5);
-        g.fillStyle(color)
-          .fillRect(p.x - 2, y - 7, 4, 14)
-          .fillRect(p.x - 7, y - 2, 14, 4);
-      }
+      g.fillStyle(0x2c5141).fillRoundedRect(p.x - 11, y - 11, 22, 22, 5);
+      g.fillStyle(color)
+        .fillRect(p.x - 2, y - 7, 4, 14)
+        .fillRect(p.x - 7, y - 2, 14, 4);
     }
     for (const e of m.enemies) this.drawEnemy(g, e, time);
     if (m.phase === 'menu') {
@@ -834,7 +824,7 @@ export class ArenaRenderer {
       spread: cause === 'explosion' ? 62 : cause === 'chain' ? 34 : 26,
     });
     const heavy = kind === 'brute' || kind === 'boss';
-    this.shake(heavy ? 190 : 110, (heavy ? 0.009 : 0.0055) + tier * 0.0016, 0);
+    this.shake(heavy ? 190 : 110, (heavy ? 0.009 : 0.0055) + tier * 0.0022, 0);
     if (tier === 3) this.edgeFlash = 0.34;
   }
   handle(event: GameEvent) {
@@ -857,7 +847,7 @@ export class ArenaRenderer {
         event.type === 'explosion'
           ? 36
           : event.type === 'kill'
-            ? 16
+            ? 22
             : event.type === 'shot'
               ? 3
               : 6;
@@ -903,7 +893,7 @@ export class ArenaRenderer {
           event.type === 'pickup'
             ? event.text
               ? this.i18n.text(event.text)
-              : this.i18n.t('openCrate')
+              : this.i18n.t('healthPickup')
             : String(event.value),
           {
             fontFamily: 'Consolas, Microsoft YaHei, monospace',
