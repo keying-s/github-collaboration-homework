@@ -29,6 +29,13 @@ function game() {
 function step(m: Simulation, seconds: number, input: Partial<InputState> = {}) {
   for (let t = 0; t < seconds; t += 1 / 60) m.tick(1 / 60, { ...idle, ...input });
 }
+/** Force a room into its cleared state so the clear branch runs on the next tick. */
+function clearRoom(m: Simulation) {
+  m.enemies = [];
+  m.queue = [];
+  m.waveIndex = m.level.waves.length;
+  m.waveDelay = 0;
+}
 function enemy(x = 760, y = 445, kind: Enemy['kind'] = 'crawler'): Enemy {
   return {
     id: 900,
@@ -129,11 +136,10 @@ test('the starting weapon choice configures the whole run and refills its own ma
   flamerRun.tick(1 / 60, { ...idle, reload: true });
   assert.ok(flamerRun.player.reloadRemaining > 0);
 });
-test('crate opening freezes combat; the choice applies once and resumes at the exit gate', () => {
+test('room clear auto-opens the two-axis choice without any pickup (#49)', () => {
   const m = game();
-  m.phase = 'exit';
-  m.pickups = [{ id: 100, x: m.player.x, y: m.player.y, kind: 'crate', age: 0 }];
-  m.tick(1 / 60, { ...idle, interact: true });
+  clearRoom(m);
+  m.tick(1 / 60, idle);
   assert.equal(m.phase, 'upgrade');
   assert.equal(m.options.length, 2);
   const [first, second] = m.options.map((o) => o.id);
@@ -149,23 +155,23 @@ test('crate opening freezes combat; the choice applies once and resumes at the e
   m.chooseUpgrade(first);
   assert.equal(m.upgrades.length, 1);
 });
-test('upgrade axes stack additively and map per weapon (spec #24)', () => {
+test('every axis pick DOUBLES the stat: 2^stacks per weapon mapping (#49)', () => {
   const m = game();
-  // rifle: shots add parallel streams, pierce lets bullets pass through enemies
+  // rifle: shots double the streams, pierce doubles the pierce count
   m.upgrades = ['shots', 'shots', 'damage', 'rate', 'pierce', 'mag'];
   const rifle = m.stats;
-  assert.equal(rifle.pellets, WEAPONS.rifle.pellets + 2);
-  assert.ok(Math.abs(rifle.damage - WEAPONS.rifle.damage * 1.2) < 1e-9);
-  assert.ok(Math.abs(rifle.interval - WEAPONS.rifle.interval / 1.15) < 1e-9);
-  assert.equal(rifle.magazine, Math.round(WEAPONS.rifle.magazine * 1.5));
-  assert.equal(m.pierceCount, 1);
-  // flamer: shots widen the cone by absolute steps, pierce extends range, never bullet-pierce
+  assert.equal(rifle.pellets, WEAPONS.rifle.pellets * 4);
+  assert.ok(Math.abs(rifle.damage - WEAPONS.rifle.damage * 2) < 1e-9);
+  assert.ok(Math.abs(rifle.interval - WEAPONS.rifle.interval / 2) < 1e-9);
+  assert.equal(rifle.magazine, WEAPONS.rifle.magazine * 2);
+  assert.equal(m.pierceCount, 2);
+  // flamer: shots double the cone, pierce doubles range, never bullet-pierce
   const flamerRun = new Simulation(seededRandom(5));
   flamerRun.start(false, 'flamer');
   flamerRun.upgrades = ['shots', 'shots', 'pierce'];
   const flamer = flamerRun.stats;
-  assert.ok(Math.abs(flamer.spread - (WEAPONS.flamer.spread + 0.24)) < 1e-9);
-  assert.ok(Math.abs(flamer.range - WEAPONS.flamer.range * 1.3) < 1e-9);
+  assert.ok(Math.abs(flamer.spread - WEAPONS.flamer.spread * 4) < 1e-9);
+  assert.ok(Math.abs(flamer.range - WEAPONS.flamer.range * 2) < 1e-9);
   assert.equal(flamerRun.pierceCount, 0);
   assert.equal(flamer.pellets, WEAPONS.flamer.pellets);
 });
@@ -242,13 +248,6 @@ test('all six waves, boss, modules and exits form a complete three-room campaign
       m.chooseBoss('flower');
       continue;
     }
-    const crate = m.pickups.find((p) => p.kind === 'crate');
-    if (crate) {
-      m.player.x = crate.x;
-      m.player.y = crate.y;
-      m.tick(1 / 60, { ...idle, interact: true });
-      continue;
-    }
     if (m.phase === 'exit') {
       roomExits++;
       m.player.x = 1160;
@@ -269,16 +268,15 @@ test('all six waves, boss, modules and exits form a complete three-room campaign
   );
   assert.equal(roomExits, 4);
   assert.equal(reachedBoss, true);
-  // Elites split and bosses summon reinforcements, so the floor is the wave total.
-  assert.ok(m.kills >= 57, `expected at least 57 kills, got ${m.kills}`);
+  // Power-fantasy waves: 15 + 26 + 30 + 19 base enemies; splits and summons only add.
+  assert.ok(m.kills >= 90, `expected at least 90 kills, got ${m.kills}`);
   // Four rooms currently: crates spawn after rooms 1-3 (cap 5, spec #24).
   assert.equal(m.upgrades.length, 3);
 });
 
-test('every room keeps the spawn, module drop and portal clear of cover and reachable', () => {
+test('every room keeps the spawn and portal clear of cover and reachable', () => {
   // Adding or editing a room must never bury a spawn point behind cover.
   const spawn: Vec = { x: 640, y: 445 };
-  const moduleDrop: Vec = { x: 640, y: 365 };
   const portal: Vec = { x: 1160, y: 400 };
   const bossSpawn: Vec = { x: 640, y: 190 };
   const enemySpawns: Vec[] = [
@@ -325,9 +323,6 @@ test('every room keeps the spawn, module drop and portal clear of cover and reac
     assert.ok(clearOf(level, portal, 17), `${room} portal is inside cover`);
     for (const point of enemySpawns)
       assert.ok(clearOf(level, point, 31), `${room} enemy spawn is inside cover`);
-    // The module may rest on top of cover (rooms place it on a center block), but a
-    // player must always be able to stand within its 78px pickup radius.
-    assert.ok(reachable(level, spawn, moduleDrop, 78), `${room} module drop is unreachable`);
     assert.ok(reachable(level, spawn, portal), `${room} portal is unreachable`);
     if (index === LEVELS.length - 1)
       assert.ok(clearOf(level, bossSpawn, 58), 'boss spawn is inside cover');
@@ -344,15 +339,15 @@ test('contact enemies remain outside the muzzle and can be shot at point-blank r
   assert.equal(m.kills, 1);
 });
 
-test('crate drafts offer two distinct axes and the whole pool is reachable', () => {
+test('auto-offers draw two distinct axes and the whole pool is reachable', () => {
   const seen = new Set<string>();
   for (let seed = 1; seed <= 30; seed++) {
     const m = new Simulation(seededRandom(seed));
     m.start();
     m.waveDelay = 100;
-    m.phase = 'exit';
-    m.pickups = [{ id: 99, x: m.player.x, y: m.player.y, kind: 'crate', age: 0 }];
-    m.tick(1 / 60, { ...idle, interact: true });
+    clearRoom(m);
+    m.tick(1 / 60, idle);
+    assert.equal(m.phase, 'upgrade');
     const first = m.options.map((o) => o.id);
     assert.equal(first.length, 2);
     assert.notEqual(first[0], first[1]);

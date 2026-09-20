@@ -337,7 +337,7 @@ export class Interface {
 
     const item = m.nearestPickup;
     let prompt = '';
-    if (item && distance(item, p) < 78) prompt = `<kbd>E</kbd> ${text('openCrate')}`;
+    if (item && distance(item, p) < 78) prompt = `<kbd>+</kbd> ${text('healthPickup')}`;
     else if (m.phase === 'exit' && distance(p, { x: 1160, y: 400 }) < 110)
       prompt = `<kbd>E</kbd> ${text(m.isLastLevel ? 'evacuate' : 'nextLevel')}`;
     else if (m.phase === 'exit') prompt = `${text('goPortal')} <span>→</span>`;
@@ -377,7 +377,7 @@ export class Interface {
             if (!stacks) return '';
             return `<div class="equipped-skill"><i>${icon('bolt', 19)}</i><div><b>${this.i18n.text(axis.label)}</b><small>×${stacks}</small></div></div>`;
           }).join('')
-        : `<div class="empty-slots"><span>+</span></div><div class="empty-label">${text('awaitCrate')}</div>`;
+        : `<div class="empty-slots"><span>+</span></div><div class="empty-label">${text('awaitBoost')}</div>`;
     }
     this.renderSoundPanel();
     this.renderOverlay();
@@ -627,7 +627,7 @@ export class Interface {
     }
     const t = (key: TranslationKey) => this.i18n.t(key);
     const done = this.model.trainingDone;
-    const complete = done.has('shoot') && done.has('dash') && done.has('crate');
+    const complete = done.has('shoot') && done.has('dash') && done.has('reload');
     const key = `${complete}|${[...done].sort().join(',')}`;
     if (key === this.trainKey) return;
     this.trainKey = key;
@@ -638,7 +638,6 @@ export class Interface {
       <div class="train-steps">
         ${step('shoot', 'trainShoot')}
         ${step('dash', 'trainDash')}
-        ${step('crate', 'trainCrate')}
         ${step('reload', 'trainReload')}
       </div>
       ${
@@ -665,9 +664,6 @@ export class Interface {
       `left:${(wx * sx).toFixed(1)}px;top:${(wy * sy).toFixed(1)}px;`;
     let html = '';
     // Crates are the E-interactable pickup the coach layer points at.
-    const wp = m.pickups.find((p) => p.kind === 'crate');
-    if (wp)
-      html += `<div class="coach-pickup" style="${place(wp.x, wp.y - 50)}"><kbd>E</kbd><span>${t('ctrlInteract')}</span></div>`;
     if (m.phase === 'exit')
       html += `<div class="coach-portal" style="${place(1145, 330)}"><span>→</span><small>${t('roomPortalHint')}</small></div>`;
     if (m.shotsFired === 0 && !m.training)
