@@ -19,6 +19,6 @@
 | 五轴道具箱二选一：删除 6 技能系统，每清一间开箱二选一加法型强化（弹丸/伤害/射速/穿透/弹匣），双枪差异化映射                                                           | keying-s                   | [PR #44](https://github.com/keying-s/github-collaboration-homework/pull/44) · [#39](https://github.com/keying-s/github-collaboration-homework/issues/39)                                                                          | 已合并（09-20）                                                                                                                    |
 | 主题竞技场重制：四个主题房间（低语草野/巨木树洞/月面前哨/万像角斗场）、每关敌人皮肤、精英怪（金框 ×4 血）、宿敌遴选 5 选 1 终极 Boss（各有外观/血量/攻击模式/二阶段） | xmy-lab                    | [214a361](https://github.com/keying-s/github-collaboration-homework/commit/214a361)（直推 main，本行由 keying-s 补记 09-20）                                                                                                      | 已合并（09-20，纳入 #24 融合修订）                                                                                                 |
 
-xmy-lab 的历史内容另有 `class-strike/` 原型与 `team-notes.md` 协作演练；自 09-20 起在 `ember-protocol/` 上承担终局宿敌军团化（见 [#24](https://github.com/keying-s/github-collaboration-homework/issues/24) 设计文档里程碑）。
+xmy-lab 的历史内容另有 `class-strike/` 原型与 `team-notes.md` 协作演练；范围冻结（见 [#24](https://github.com/keying-s/github-collaboration-homework/issues/24)）后不做未来工作指派，任何成员想认领新功能随时开 Issue。
 
 复杂功能的详细设计、人机协作过程与验证记录见 [docs/features/](features/)（按 `<Issue 号>-<功能>.md` 命名）。
