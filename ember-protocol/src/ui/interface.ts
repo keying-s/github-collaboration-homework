@@ -20,6 +20,7 @@ export class Interface {
   private unsubscribeLanguage: () => void = () => undefined;
   private nodes: Record<string, HTMLElement> = {};
   private guideOpen = false;
+  private guideOpenedFromPause = false;
   private guideTab: 'story' | 'controls' | 'practice' = 'story';
   private guideStep = 0;
   private readonly guideChapters = 4;
@@ -94,6 +95,10 @@ export class Interface {
     if (event.code === 'Escape' && this.soundPanelOpen) {
       this.soundPanelOpen = false;
       this.refresh();
+      return;
+    }
+    if (event.code === 'Escape' && this.guideOpen) {
+      this.closeGuide();
       return;
     }
     if (event.code === 'Escape' || event.code === 'KeyP') {
@@ -412,7 +417,7 @@ export class Interface {
     if (m.phase === 'menu') {
       const weapons: WeaponId[] = ['flamer', 'rifle'];
       overlay.classList.add('menu-overlay');
-      overlay.innerHTML = `<div class="menu-content"><div class="eyebrow"><span></span> ${t('menuEyebrow')}</div><h1>${t('heroLine1')}<br><em>${t('heroLine2')}</em></h1><p class="menu-description">${t('menuDescription1')}<br>${t('menuDescription2')}</p><div class="mode-switch" role="group" aria-label="${t('operationMode')}"><button data-action="solo" class="${!this.squad ? 'selected' : ''}">${icon('person', 18)} ${t('soloAction')}</button><button data-action="squad" class="${this.squad ? 'selected' : ''}">${icon('people', 19)} ${t('aiCompanion')}</button></div><div class="weapon-choice" role="group" aria-label="${t('chooseLoadout')}"><span class="choice-label">${t('chooseLoadout')}</span>${weapons.map((id) => `<button class="weapon-pick" data-action="start" data-weapon="${id}"><span class="pick-art">${gunIcon(id)}</span><b>${this.i18n.text(WEAPONS[id].name)}</b><small>${this.i18n.text(WEAPONS[id].description)}</small></button>`).join('')}</div><div class="menu-meta"><span>${t('fourAreas')}</span><i></i><span>${t('twoLoadouts')}</span><i></i><span>${t('fiveAxes')}</span></div><div class="menu-tip">${icon('info', 14)} ${t('desktopTip')}</div></div><div class="arena-stamp"><span>FIELD TEST</span><strong>01—${String(LEVELS.length).padStart(2, '0')}</strong><small>${t('runMotto')}</small></div>`;
+      overlay.innerHTML = `<div class="menu-content"><div class="eyebrow"><span></span> ${t('menuEyebrow')}</div><h1>${t('heroLine1')}<br><em>${t('heroLine2')}</em></h1><p class="menu-description">${t('menuDescription1')}<br>${t('menuDescription2')}</p><div class="mode-switch" role="group" aria-label="${t('operationMode')}"><button data-action="solo" class="${!this.squad ? 'selected' : ''}">${icon('person', 18)} ${t('soloAction')}</button><button data-action="squad" class="${this.squad ? 'selected' : ''}">${icon('people', 19)} ${t('aiCompanion')}</button></div><div class="weapon-choice" role="group" aria-label="${t('chooseLoadout')}"><span class="choice-label">${t('chooseLoadout')}</span>${weapons.map((id) => `<button class="weapon-pick" data-action="start" data-weapon="${id}"><span class="pick-art">${gunIcon(id)}</span><b>${this.i18n.text(WEAPONS[id].name)}</b><small>${this.i18n.text(WEAPONS[id].description)}</small></button>`).join('')}</div><button class="start-button how-to-play" data-action="guide"><span>${t('howToPlay')}</span>${icon('book', 16)}</button><div class="menu-meta"><span>${t('fourAreas')}</span><i></i><span>${t('twoLoadouts')}</span><i></i><span>${t('fiveAxes')}</span></div><div class="menu-tip">${icon('info', 14)} ${t('desktopTip')}</div></div><div class="arena-stamp"><span>FIELD TEST</span><strong>01—${String(LEVELS.length).padStart(2, '0')}</strong><small>${t('runMotto')}</small></div>`;
     } else if (m.phase === 'upgrade') {
       overlay.classList.add('modal-overlay');
       overlay.innerHTML = `<div class="upgrade-modal"><div class="eyebrow">${t('upgradeEyebrow')}</div><h2>${t('upgradeTitle1')}<em>${t('upgradeTitle2')}</em></h2><p>${t('upgradeDescription')}</p><div class="upgrade-options">${m.options
@@ -444,20 +449,24 @@ export class Interface {
       overlay.innerHTML = `<div class="result-modal"><div class="result-emblem">${icon(won ? 'flag' : 'shield', 44)}</div><div class="eyebrow">${won ? 'MISSION COMPLETE' : 'SIGNAL LOST'}</div><h2>${t(won ? 'wonTitle' : 'lostTitle')}</h2><p>${t(won ? 'wonDescription' : 'lostDescription')}</p><div class="result-stats"><div><b>${m.kills}</b><small>${t('enemiesCleared')}</small></div><div><b>${m.bestCombo}</b><small>${t('bestCombo')}</small></div><div><b>${Math.floor(m.elapsed / 60)}:${String(Math.floor(m.elapsed % 60)).padStart(2, '0')}</b><small>${t('runTime')}</small></div></div><button class="start-button" data-action="start"><span>${t('retry')}</span>${icon('reset')}</button><button class="text-button" data-action="home">${t('returnHome')}</button></div>`;
     } else if (m.paused) {
       overlay.classList.add('modal-overlay');
-      overlay.innerHTML = `<div class="pause-modal"><div class="eyebrow">TAKE A BREATH</div><h2>${t('pauseHeading')}</h2><p>${t('pauseDescription')}</p><button class="start-button" data-action="resume"><span>${t('resume')}</span>${icon('play')}</button><button class="text-button" data-action="home">${t('endRun')}</button><div class="pause-controls"><span>${t('controlMoveFire')}</span><span>${t('controlDashReload')}</span><span>${t('controlInteract')}</span></div></div>`;
+      overlay.innerHTML = `<div class="pause-modal"><div class="eyebrow">TAKE A BREATH</div><h2>${t('pauseHeading')}</h2><p>${t('pauseDescription')}</p><button class="start-button" data-action="resume"><span>${t('resume')}</span>${icon('play')}</button><button class="text-button" data-action="guide"><span>${icon('book', 16)}</span><span>${t('guideButton')}</span></button><button class="text-button" data-action="home">${t('endRun')}</button><div class="pause-controls"><span>${t('controlMoveFire')}</span><span>${t('controlDashReload')}</span><span>${t('controlInteract')}</span></div></div>`;
     }
   }
 
   private openGuide() {
     this.guideOpen = true;
-    if (['combat', 'exit'].includes(this.model.phase)) this.model.paused = true;
+    this.guideOpenedFromPause = this.model.paused;
+    if (['combat', 'exit'].includes(this.model.phase) && !this.model.paused)
+      this.model.paused = true;
     this.guideTab = 'story';
     this.guideStep = 0;
     this.renderGuide();
   }
   private closeGuide() {
     this.guideOpen = false;
-    if (['combat', 'exit'].includes(this.model.phase) && !this.model.training)
+    const wasFromPause = this.guideOpenedFromPause;
+    this.guideOpenedFromPause = false;
+    if (['combat', 'exit'].includes(this.model.phase) && !this.model.training && !wasFromPause)
       this.model.paused = false;
     try {
       localStorage.setItem('ember-protocol-onboarded', '1');
@@ -471,6 +480,63 @@ export class Interface {
   }
   private ctrlRow(key: string, label: string) {
     return `<div class="ctrl-row"><kbd>${key}</kbd><span>${label}</span></div>`;
+  }
+  /** Thematic vector art for each story chapter (background of the game). */
+  private storyArt(step: number): string {
+    const c = {
+      ink: '#8fa580',
+      glow: '#efb58a',
+      peach: '#f0c79c',
+      line: '#34493e',
+      leaf: '#c8d6b1',
+      dim: '#5c715f',
+      mono: "Consolas, 'Microsoft YaHei', monospace",
+    };
+    if (step === 0)
+      return `<svg viewBox="0 0 320 140" role="img" aria-hidden="true">
+        <line x1="18" y1="118" x2="302" y2="118" stroke="${c.line}" stroke-width="2"/>
+        <circle cx="104" cy="98" r="42" fill="${c.glow}" opacity="0.13"/>
+        <circle cx="104" cy="98" r="15" fill="${c.peach}"/>
+        <g stroke="${c.ink}" stroke-width="3" fill="none" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M104 98 L86 44 M104 98 L122 44 M86 44 L122 44"/>
+          <path d="M93 70 L111 70 M90 86 L118 86 M104 98 L104 118"/>
+        </g>
+        <g fill="${c.glow}"><circle cx="150" cy="40" r="2.4"/><circle cx="168" cy="28" r="1.8"/><circle cx="186" cy="46" r="2"/><circle cx="202" cy="32" r="1.6"/></g>
+        <line x1="34" y1="58" x2="288" y2="58" stroke="${c.glow}" stroke-width="2" stroke-dasharray="9 9" opacity="0.6"/>
+        <text x="288" y="52" text-anchor="end" font-size="9" fill="${c.dim}" font-family="${c.mono}" letter-spacing="1">CORDON</text>
+      </svg>`;
+    if (step === 1)
+      return `<svg viewBox="0 0 320 140" role="img" aria-hidden="true">
+        <circle cx="160" cy="70" r="28" fill="${c.glow}" opacity="0.14"/>
+        <circle cx="160" cy="70" r="14" fill="${c.peach}"/>
+        <circle cx="160" cy="70" r="22" fill="none" stroke="${c.ink}" stroke-width="2" stroke-dasharray="4 5"/>
+        <g stroke="${c.ink}" stroke-width="2" opacity="0.75">
+          <line x1="160" y1="70" x2="64" y2="40"/><line x1="160" y1="70" x2="252" y2="44"/>
+          <line x1="160" y1="70" x2="70" y2="108"/><line x1="160" y1="70" x2="250" y2="104"/>
+        </g>
+        <g fill="${c.leaf}"><path d="M58 34 l8 10 l-8 10 l-8 -10 z"/><path d="M256 38 l7 9 l-7 9 l-7 -9 z"/><path d="M64 102 l7 9 l-7 9 l-7 -9 z"/><path d="M252 100 l7 9 l-7 9 l-7 -9 z"/></g>
+        <g fill="${c.glow}"><circle cx="110" cy="52" r="2"/><circle cx="210" cy="54" r="2"/><circle cx="112" cy="92" r="1.8"/><circle cx="208" cy="90" r="1.8"/></g>
+      </svg>`;
+    if (step === 2)
+      return `<svg viewBox="0 0 320 140" role="img" aria-hidden="true">
+        <path d="M40 100 C90 40 150 40 180 70 S260 110 284 56" fill="none" stroke="${c.line}" stroke-width="2" stroke-dasharray="6 7"/>
+        <circle cx="40" cy="100" r="7" fill="${c.peach}"/>
+        <circle cx="120" cy="64" r="6" fill="${c.ink}"/><circle cx="186" cy="74" r="6" fill="${c.ink}"/><circle cx="244" cy="86" r="6" fill="${c.ink}"/>
+        <circle cx="284" cy="56" r="10" fill="${c.glow}" opacity="0.2"/><circle cx="284" cy="56" r="8" fill="none" stroke="${c.glow}" stroke-width="2"/>
+        <path d="M278 50 l14 6 l-14 6 z" fill="${c.leaf}"/>
+        <text x="40" y="122" text-anchor="middle" font-size="8" fill="${c.dim}" font-family="${c.mono}">YOU</text>
+        <text x="284" y="82" text-anchor="middle" font-size="8" fill="${c.glow}" font-family="${c.mono}">WARDEN</text>
+      </svg>`;
+    return `<svg viewBox="0 0 320 140" role="img" aria-hidden="true">
+      <line x1="18" y1="120" x2="302" y2="120" stroke="${c.line}" stroke-width="2"/>
+      <g fill="${c.peach}"><circle cx="160" cy="40" r="12"/><path d="M142 98 q0 -40 18 -40 q18 0 18 40 z"/></g>
+      <g transform="translate(96,74)"><circle r="14" fill="none" stroke="${c.ink}" stroke-width="2"/><line x1="-15" y1="-15" x2="15" y2="15" stroke="${c.glow}" stroke-width="2"/></g>
+      <text x="96" y="104" text-anchor="middle" font-size="8" fill="${c.dim}" font-family="${c.mono}">NO GOLD</text>
+      <g transform="translate(160,74)" fill="${c.leaf}"><path d="M-9 -12 h11 v13 h9 v7 h-20 z"/></g>
+      <text x="160" y="104" text-anchor="middle" font-size="8" fill="${c.dim}" font-family="${c.mono}">FOOTING</text>
+      <g transform="translate(224,74)" fill="${c.leaf}"><circle cy="-7" r="6"/><path d="M-8 12 q0 -16 8 -16 q8 0 8 16 z"/></g>
+      <text x="224" y="104" text-anchor="middle" font-size="8" fill="${c.dim}" font-family="${c.mono}">ALLY</text>
+    </svg>`;
   }
   private renderGuide() {
     const g = this.nodes['guide'];
@@ -487,6 +553,7 @@ export class Interface {
       <div class="story-wrap">
         <div class="eyebrow"><span></span> ${t('storyEyebrow')}</div>
         <div class="chapter in">
+          <div class="chapter-art">${this.storyArt(this.guideStep)}</div>
           <h3>${t(chapterTitle)}</h3>
           <p>${t(chapterBody)}</p>
         </div>
@@ -509,7 +576,6 @@ export class Interface {
           ${this.ctrlRow('SPACE / SHIFT', t('ctrlDash'))}
           ${this.ctrlRow('R', t('ctrlReload'))}
           ${this.ctrlRow('E', t('ctrlInteract'))}
-          ${this.ctrlRow('Q', t('ctrlSwitch'))}
           ${this.ctrlRow('ESC', t('ctrlPause'))}
         </div>
         <div class="practice-actions">
@@ -561,8 +627,7 @@ export class Interface {
     }
     const t = (key: TranslationKey) => this.i18n.t(key);
     const done = this.model.trainingDone;
-    const complete =
-      done.has('shoot') && done.has('switch') && done.has('dash') && done.has('pickup');
+    const complete = done.has('shoot') && done.has('dash') && done.has('crate');
     const key = `${complete}|${[...done].sort().join(',')}`;
     if (key === this.trainKey) return;
     this.trainKey = key;
@@ -572,9 +637,8 @@ export class Interface {
       <div class="train-head"><b>${t('trainTitle')}</b><span>${t('trainHint')}</span></div>
       <div class="train-steps">
         ${step('shoot', 'trainShoot')}
-        ${step('switch', 'trainSwitch')}
         ${step('dash', 'trainDash')}
-        ${step('pickup', 'trainPickup')}
+        ${step('crate', 'trainCrate')}
         ${step('reload', 'trainReload')}
       </div>
       ${
@@ -608,6 +672,8 @@ export class Interface {
       html += `<div class="coach-portal" style="${place(1145, 330)}"><span>→</span><small>${t('roomPortalHint')}</small></div>`;
     if (m.shotsFired === 0 && !m.training)
       html += `<div class="coach-shoot">${t('roomShootHint')}</div>`;
+    else if (!m.dashed && !m.training)
+      html += `<div class="coach-shoot">${t('roomDashHint')}</div>`;
     el.innerHTML = html;
   }
 

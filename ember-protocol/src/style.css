@@ -1055,6 +1055,18 @@ button:hover {
   background: #fac799;
   transform: translateY(-2px);
 }
+.start-button.how-to-play {
+  margin-top: 12px;
+  background: transparent;
+  color: #efb58a;
+  border: 1px solid #efb58a66;
+  box-shadow: none;
+}
+.start-button.how-to-play:hover {
+  background: #efb58a1a;
+  color: #fac799;
+  transform: translateY(-2px);
+}
 .menu-meta {
   display: flex;
   align-items: center;
@@ -1895,6 +1907,28 @@ kbd {
   line-height: 2.1;
   color: #c3d0b4;
   margin: 0;
+}
+.chapter-art {
+  width: 100%;
+  max-width: 340px;
+  margin: 0 auto 18px;
+  padding: 14px 0 6px;
+  animation: artFloat 4.5s ease-in-out infinite;
+}
+.chapter-art svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  filter: drop-shadow(0 6px 14px #050d0a55);
+}
+@keyframes artFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
 }
 .chapter.in {
   animation: chapterIn 0.45s ease;

@@ -58,6 +58,7 @@ export class Simulation {
   training = false;
   trainingDone = new Set<string>();
   shotsFired = 0;
+  dashed = false;
   hint: StatusMessage = { key: 'stateReady' };
   waveDelay = 1.5;
   /** Final-boss choice, picked in the pre-arena selection window. */
@@ -148,6 +149,7 @@ export class Simulation {
     this.training = false;
     this.trainingDone = new Set();
     this.shotsFired = 0;
+    this.dashed = false;
     this.player = this.newPlayer();
     this.player.weapon = weapon;
     this.kills = 0;
@@ -169,10 +171,13 @@ export class Simulation {
     this.phase = 'combat';
     this.trainingDone = new Set();
     this.shotsFired = 0;
+    this.dashed = false;
     this.player.invincible = 999;
     this.barrels = [];
     this.enemies = [];
     this.queue = [];
+    // A practice crate teaches the E-interact drill that replaces weapon pickups.
+    this.pickups = [{ id: this.nextId++, x: 760, y: 445, kind: 'crate', age: 0 }];
     this.spawnTrainingDummies();
   }
   endTraining() {
@@ -334,6 +339,7 @@ export class Simulation {
       p.invincible = 0.32;
       this.emit('dash', p, { color: 0xfab583 });
       if (this.training) this.trainingDone.add('dash');
+      else this.dashed = true;
     }
     if (p.dashRemaining > 0) {
       this.move(p, p.dashDirection, 840 * dt, 17);
@@ -361,7 +367,11 @@ export class Simulation {
       const item = this.nearestPickup;
       if (item && distance(item, p) < 78) {
         this.pickups = this.pickups.filter((v) => v.id !== item.id);
-        if (item.kind === 'crate') {
+        if (item.kind === 'crate' && this.training) {
+          // In the training sandbox the crate only teaches the interaction; no modal.
+          this.trainingDone.add('crate');
+          this.emit('pickup', p, { color: 0xe8b46a });
+        } else if (item.kind === 'crate') {
           const pool = [...UPGRADES];
           for (let i = pool.length - 1; i > 0; i--) {
             const j = Math.floor(this.random() * (i + 1));

@@ -447,3 +447,20 @@ test('training mode is a safe sandbox: no damage, dummies respawn, drills are tr
   assert.equal(m.training, false);
   assert.equal(m.phase, 'menu');
 });
+
+test('sector-1 hint sequence: firing then dashing is tracked so coach can switch fire -> dash hints', () => {
+  const m = game();
+  assert.equal(m.shotsFired, 0);
+  assert.equal(m.dashed, false);
+  // Firing sets the fire flag (drives the "hold left mouse to fire" hint).
+  step(m, 0.3, { firing: true });
+  assert.ok(m.shotsFired > 0, 'shotsFired increments after firing');
+  assert.equal(m.dashed, false, 'dash flag stays false until a real dash');
+  // Dashing sets the dash flag (drives the "press space to dash" hint).
+  m.tick(1 / 60, { ...idle, move: { x: 1, y: 0 }, dash: true });
+  assert.equal(m.dashed, true, 'dashed flips true on first dash');
+  // A fresh run resets both flags.
+  m.start();
+  assert.equal(m.shotsFired, 0);
+  assert.equal(m.dashed, false);
+});
