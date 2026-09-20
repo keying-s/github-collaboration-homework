@@ -19,6 +19,7 @@ export class Interface {
   private unsubscribeLanguage: () => void = () => undefined;
   private nodes: Record<string, HTMLElement> = {};
   private guideOpen = false;
+  private guideOpenedFromPause = false;
   private guideTab: 'story' | 'controls' | 'practice' = 'story';
   private guideStep = 0;
   private readonly guideChapters = 4;
@@ -91,6 +92,10 @@ export class Interface {
     if (event.code === 'Escape' && this.soundPanelOpen) {
       this.soundPanelOpen = false;
       this.refresh();
+      return;
+    }
+    if (event.code === 'Escape' && this.guideOpen) {
+      this.closeGuide();
       return;
     }
     if (event.code === 'Escape' || event.code === 'KeyP') {
@@ -407,20 +412,24 @@ export class Interface {
       overlay.innerHTML = `<div class="result-modal"><div class="result-emblem">${icon(won ? 'flag' : 'shield', 44)}</div><div class="eyebrow">${won ? 'MISSION COMPLETE' : 'SIGNAL LOST'}</div><h2>${t(won ? 'wonTitle' : 'lostTitle')}</h2><p>${t(won ? 'wonDescription' : 'lostDescription')}</p><div class="result-stats"><div><b>${m.kills}</b><small>${t('enemiesCleared')}</small></div><div><b>${m.bestCombo}</b><small>${t('bestCombo')}</small></div><div><b>${Math.floor(m.elapsed / 60)}:${String(Math.floor(m.elapsed % 60)).padStart(2, '0')}</b><small>${t('runTime')}</small></div></div><button class="start-button" data-action="start"><span>${t('retry')}</span>${icon('reset')}</button><button class="text-button" data-action="home">${t('returnHome')}</button></div>`;
     } else if (m.paused) {
       overlay.classList.add('modal-overlay');
-      overlay.innerHTML = `<div class="pause-modal"><div class="eyebrow">TAKE A BREATH</div><h2>${t('pauseHeading')}</h2><p>${t('pauseDescription')}</p><button class="start-button" data-action="resume"><span>${t('resume')}</span>${icon('play')}</button><button class="text-button" data-action="home">${t('endRun')}</button>      <div class="pause-controls"><span>${t('controlMoveFire')}</span><span>${t('controlDashReload')}</span><span>${t('controlPickupSwitch')}</span></div></div>`;
+      overlay.innerHTML = `<div class="pause-modal"><div class="eyebrow">TAKE A BREATH</div><h2>${t('pauseHeading')}</h2><p>${t('pauseDescription')}</p><button class="start-button" data-action="resume"><span>${t('resume')}</span>${icon('play')}</button><button class="text-button" data-action="guide"><span>${icon('book', 16)}</span><span>${t('guideButton')}</span></button><button class="text-button" data-action="home">${t('endRun')}</button>      <div class="pause-controls"><span>${t('controlMoveFire')}</span><span>${t('controlDashReload')}</span><span>${t('controlPickupSwitch')}</span></div></div>`;
     }
   }
 
   private openGuide() {
     this.guideOpen = true;
-    if (['combat', 'exit'].includes(this.model.phase)) this.model.paused = true;
+    this.guideOpenedFromPause = this.model.paused;
+    if (['combat', 'exit'].includes(this.model.phase) && !this.model.paused)
+      this.model.paused = true;
     this.guideTab = 'story';
     this.guideStep = 0;
     this.renderGuide();
   }
   private closeGuide() {
     this.guideOpen = false;
-    if (['combat', 'exit'].includes(this.model.phase) && !this.model.training)
+    const wasFromPause = this.guideOpenedFromPause;
+    this.guideOpenedFromPause = false;
+    if (['combat', 'exit'].includes(this.model.phase) && !this.model.training && !wasFromPause)
       this.model.paused = false;
     try {
       localStorage.setItem('ember-protocol-onboarded', '1');
@@ -570,6 +579,8 @@ export class Interface {
       html += `<div class="coach-portal" style="${place(1145, 330)}"><span>→</span><small>${t('roomPortalHint')}</small></div>`;
     if (m.shotsFired === 0 && !m.training)
       html += `<div class="coach-shoot">${t('roomShootHint')}</div>`;
+    else if (!m.dashed && !m.training)
+      html += `<div class="coach-shoot">${t('roomDashHint')}</div>`;
     el.innerHTML = html;
   }
 
