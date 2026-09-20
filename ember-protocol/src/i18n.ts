@@ -308,7 +308,7 @@ export const TRANSLATIONS = {
     ctrlAim: 'Move mouse to aim, hold left click to fire',
     ctrlDash: 'Space or Shift to dash with brief i-frames',
     ctrlReload: 'R to reload',
-    ctrlInteract: 'E to pick up weapons / skills or enter the gate',
+    ctrlInteract: 'E to open supply crates or enter the portal',
     ctrlPause: 'Esc to pause / open the guide anytime',
     practiceTitle: 'TRAINING RANGE',
     practiceIntro:
