@@ -1,8 +1,8 @@
-import { LEVELS, SKILLS, WEAPONS } from '../game/config';
+import { BOSSES, LEVELS, SKILLS, WEAPONS } from '../game/config';
 import { distance } from '../game/math';
 import type { AudioEngine } from '../game/audio';
 import type { Simulation } from '../game/simulation';
-import type { SkillId } from '../game/types';
+import type { BossId, SkillId } from '../game/types';
 import type { I18n, TranslationKey } from '../i18n';
 import { gunIcon, icon } from './icons';
 
@@ -23,6 +23,8 @@ export class Interface {
   private guideStep = 0;
   private readonly guideChapters = 4;
   private trainKey = '';
+  /** Card order in the nemesis window, reshuffled every visit. */
+  private bossOrder: BossId[] = [];
 
   constructor(
     private model: Simulation,
@@ -202,6 +204,7 @@ export class Interface {
           .catch(() => this.showNotice(this.i18n.t('fullscreenUnavailable')));
     }
     if (action === 'skill') this.model.chooseSkill(button.dataset.skill as SkillId);
+    if (action === 'bossPick') this.model.chooseBoss(button.dataset.boss as BossId);
     // Guide navigation (Next/Prev/chapter + tab switch) changes state but the
     // 70ms refresh() loop does not repaint the guide, so repaint it explicitly
     // here — otherwise the buttons appear unresponsive.
@@ -312,7 +315,16 @@ export class Interface {
     this.set('best-combo', String(m.bestCombo).padStart(2, '0'));
     this.set('mode-label', (menu ? this.squad : m.squad) ? text('aiCoop') : text('solo'));
     this.nodes['boss-bar'].style.display = m.boss ? 'block' : 'none';
-    if (m.boss) this.nodes['boss-fill'].style.width = `${(m.boss.hp / m.boss.maxHp) * 100}%`;
+    if (m.boss) {
+      this.nodes['boss-fill'].style.width = `${(m.boss.hp / m.boss.maxHp) * 100}%`;
+      const cfg = BOSSES.find((b) => b.id === (m.boss!.bossId ?? 'flower'))!;
+      const nameEl = this.nodes['boss-bar'].querySelector('b')!;
+      const enEl = this.nodes['boss-bar'].querySelector('span')!;
+      if (nameEl.textContent !== this.i18n.text(cfg.name))
+        nameEl.textContent = this.i18n.text(cfg.name);
+      if (enEl.textContent !== cfg.name.en) enEl.textContent = cfg.name.en;
+    }
+    if (m.phase !== 'bossSelect') this.bossOrder = [];
 
     const item = m.nearestPickup;
     let prompt = '';
@@ -401,6 +413,23 @@ export class Interface {
     } else if (m.phase === 'upgrade') {
       overlay.classList.add('modal-overlay');
       overlay.innerHTML = `<div class="upgrade-modal"><div class="eyebrow">${t('upgradeEyebrow')}</div><h2>${t('upgradeTitle1')}<em>${t('upgradeTitle2')}</em></h2><p>${t('upgradeDescription')}</p><div class="upgrade-options">${m.options.map((skill, i) => `<button class="upgrade-option" data-action="skill" data-skill="${skill.id}"><span class="option-index">MODULE / 0${i + 1}</span><i style="color:${skill.color}">${icon(skill.icon, 34)}</i><span class="skill-tag" style="color:${skill.color}">${this.i18n.text(skill.tag)}</span><h3>${this.i18n.text(skill.name)}</h3><p>${this.i18n.text(skill.description)}</p><span class="choose-label">${t('equipModule')} ${icon('arrow', 17)}</span></button>`).join('')}</div><small>${t('upgradePaused')}</small></div>`;
+    } else if (m.phase === 'bossSelect') {
+      overlay.classList.add('modal-overlay');
+      if (!this.bossOrder.length) {
+        this.bossOrder = [...BOSSES].map((b) => b.id);
+        for (let i = this.bossOrder.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [this.bossOrder[i], this.bossOrder[j]] = [this.bossOrder[j], this.bossOrder[i]];
+        }
+      }
+      const cards = this.bossOrder
+        .map((id) => BOSSES.find((b) => b.id === id)!)
+        .map((cfg) => {
+          const hex = `#${cfg.color.toString(16).padStart(6, '0')}`;
+          return `<button class="upgrade-option boss-card" data-action="bossPick" data-boss="${cfg.id}"><span class="option-index">NEMESIS / ${cfg.id.toUpperCase()}</span><i class="boss-glyph">${cfg.glyph}</i><span class="skill-tag" style="color:${hex}">${this.i18n.text(cfg.tag)}</span><h3>${this.i18n.text(cfg.name)}</h3><p>${this.i18n.text(cfg.description)}</p><span class="choose-label">${t('bossFight')} ${icon('arrow', 17)}</span></button>`;
+        })
+        .join('');
+      overlay.innerHTML = `<div class="upgrade-modal boss-modal"><div class="eyebrow">${t('bossSelectEyebrow')}</div><h2>${t('bossSelectTitle')}<em>FINAL DUEL</em></h2><p>${t('bossSelectDesc')}</p><div class="boss-options">${cards}</div><small>${t('bossSelectNote')}</small></div>`;
     } else if (m.phase === 'won' || m.phase === 'lost') {
       const won = m.phase === 'won';
       overlay.classList.add('modal-overlay');

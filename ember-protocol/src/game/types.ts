@@ -9,8 +9,12 @@ export interface Rect extends Vec {
 export type WeaponId = 'rifle' | 'shotgun' | 'arc';
 export type SkillId = 'chain' | 'cryo' | 'pierce' | 'nova' | 'leech' | 'haste';
 export type EnemyKind = 'crawler' | 'spitter' | 'brute' | 'boss';
+export type BossId = 'flower' | 'zombie' | 'doll' | 'scorpion' | 'crow';
+/** Visual skin of an enemy. Purely cosmetic: behavior still comes from `kind`. */
+export type EnemySkin = 'spider' | 'bat' | 'alien';
+export type LevelTheme = 'grass' | 'hollow' | 'moon' | 'arena';
 export type KillCause = 'bullet' | 'explosion' | 'chain';
-export type Phase = 'menu' | 'combat' | 'upgrade' | 'exit' | 'won' | 'lost';
+export type Phase = 'menu' | 'combat' | 'upgrade' | 'bossSelect' | 'exit' | 'won' | 'lost';
 export type Locale = 'zh-CN' | 'en';
 export type StatusMessageKey =
   | 'stateReady'
@@ -80,6 +84,10 @@ export interface Enemy extends Vec {
   windup: number;
   target: Vec;
   charge: number;
+  skin?: EnemySkin;
+  bossId?: BossId;
+  elite?: boolean;
+  atk?: number;
   deathHandled?: boolean;
   knock?: Vec;
   cause?: KillCause;
@@ -146,7 +154,21 @@ export interface Level {
   subtitle: LocalizedText;
   accent: number;
   floor: number;
+  theme: LevelTheme;
   obstacles: Rect[];
   barrels: Vec[];
-  waves: EnemyKind[][];
+  /** A trailing "!" on a wave entry marks it as an elite. */
+  waves: string[][];
+}
+/** Cosmetic + tuning profile for the final boss the player picks. */
+export interface BossConfig {
+  id: BossId;
+  glyph: string;
+  name: LocalizedText;
+  tag: LocalizedText;
+  description: LocalizedText;
+  color: number;
+  hp: number;
+  /** Bosses that hold position instead of chasing. */
+  stationary?: boolean;
 }

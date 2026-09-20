@@ -1,10 +1,12 @@
-import { LEVELS, SKILLS, WEAPONS, WORLD } from './config';
+import { BOSSES, LEVELS, SKILLS, WEAPONS, WORLD } from './config';
 import { circleRect, clamp, distance, normalize, segmentCircle, segmentRect } from './math';
 import type {
   Barrel,
   Bullet,
+  BossId,
   Enemy,
   EnemyKind,
+  EnemySkin,
   GameEvent,
   InputState,
   KillCause,
@@ -19,6 +21,8 @@ import type {
 
 const RADII = { crawler: 20, spitter: 23, brute: 31, boss: 58 };
 const HP = { crawler: 48, spitter: 66, brute: 185, boss: 1250 };
+/** Visual theme of the regular enemies, ordered by level. */
+const SKINS: EnemySkin[] = ['spider', 'bat', 'alien'];
 const EMPTY_INPUT: InputState = {
   move: { x: 0, y: 0 },
   aim: { x: 800, y: 400 },
@@ -57,7 +61,9 @@ export class Simulation {
   shotsFired = 0;
   hint: StatusMessage = { key: 'stateReady' };
   waveDelay = 1.5;
-  private queue: EnemyKind[] = [];
+  /** Final-boss choice, picked in the pre-arena selection window. */
+  bossId: BossId | null = null;
+  private queue: string[] = [];
   private spawnTimer = 0;
   private nextId = 1;
   private hitCount = 0;
@@ -133,6 +139,7 @@ export class Simulation {
     this.hitCount = 0;
     this.freeze = 0;
     this.levelIndex = 0;
+    this.bossId = null;
     this.paused = false;
     this.phase = 'combat';
     this.prepareRoom();
@@ -225,8 +232,17 @@ export class Simulation {
       return;
     }
     this.levelIndex++;
-    this.phase = 'combat';
+    // Entering the arena: pause behind the boss-selection window until a nemesis is picked.
+    this.phase = this.isLastLevel ? 'bossSelect' : 'combat';
     this.prepareRoom();
+  }
+  /** Confirm the final boss from the pre-arena selection window. */
+  chooseBoss(id: BossId) {
+    if (this.phase !== 'bossSelect') return;
+    this.bossId = id;
+    this.phase = 'combat';
+    this.hint = { key: 'stateReady' };
+    this.player.invincible = 1.2;
   }
   chooseSkill(id: SkillId) {
     if (this.phase !== 'upgrade' || !this.options.some((s) => s.id === id)) return;
@@ -492,7 +508,7 @@ export class Simulation {
       );
     }
   }
-  private spawn(kind: EnemyKind) {
+  private spawn(token: string) {
     const points = [
       { x: 135, y: 160 },
       { x: 640, y: 115 },
@@ -503,15 +519,23 @@ export class Simulation {
     ];
     let p = points[Math.floor(this.random() * points.length)];
     if (distance(p, this.player) < 270) p = points[(points.indexOf(p) + 3) % points.length];
-    if (kind === 'boss') p = { x: 640, y: 190 };
-    const hp = HP[kind] * (this.squad ? 1.2 : 1);
+    if (token.startsWith('boss')) p = { x: 640, y: 190 };
+    this.spawnAt(p, token);
+  }
+  /** Shared enemy factory. A trailing "!" on the token marks an elite variant. */
+  private spawnAt(p: Vec, token: string, forcedSkin?: EnemySkin) {
+    const elite = token.endsWith('!');
+    const kind = token.replace(/!$/, '') as EnemyKind;
+    const bossCfg =
+      kind === 'boss' ? BOSSES.find((b) => b.id === (this.bossId ?? 'flower'))! : null;
+    const hp = (bossCfg ? bossCfg.hp : HP[kind]) * (this.squad ? 1.2 : 1) * (elite ? 4 : 1);
     this.enemies.push({
       ...p,
       id: this.nextId++,
       kind,
       hp,
       maxHp: hp,
-      radius: RADII[kind],
+      radius: RADII[kind] * (elite ? 1.35 : 1),
       angle: 0,
       cooldown: 1.1 + this.random(),
       slow: 0,
@@ -520,7 +544,127 @@ export class Simulation {
       windup: 0,
       target: { ...this.player },
       charge: 0,
+      skin:
+        forcedSkin ??
+        (kind === 'boss'
+          ? undefined
+          : this.levelIndex < 3
+            ? SKINS[this.levelIndex]
+            : SKINS[Math.floor(this.random() * SKINS.length)]),
+      bossId: bossCfg?.id,
+      elite,
+      atk: 0,
     });
+  }
+  /** Bosses call reinforcements. Capped so swarms stay readable. */
+  private summon(from: Vec, count: number, kind: EnemyKind, skin: EnemySkin) {
+    const alive = this.enemies.filter((e) => e.hp > 0).length;
+    const n = Math.min(count, Math.max(0, 9 - alive));
+    for (let i = 0; i < n; i++) {
+      const a = (i / Math.max(1, n)) * Math.PI * 2 + this.random();
+      const p = {
+        x: clamp(from.x + Math.cos(a) * 95, 110, 1170),
+        y: clamp(from.y + Math.sin(a) * 95, 120, 690),
+      };
+      if (this.level.obstacles.some((b) => circleRect(p, 22, b))) continue;
+      const hp = HP[kind] * 0.8;
+      this.enemies.push({
+        ...p,
+        id: this.nextId++,
+        kind,
+        hp,
+        maxHp: hp,
+        radius: RADII[kind],
+        angle: 0,
+        cooldown: 1.1,
+        slow: 0,
+        flash: 0,
+        age: 0,
+        windup: 0,
+        target: { ...this.player },
+        charge: 0,
+        skin,
+        atk: 0,
+      });
+      this.emit('wave', p, { text: undefined });
+    }
+  }
+  /** Doll boss: blink to a flank around the player, clear of cover. */
+  private bossBlink(e: Enemy) {
+    for (let tries = 0; tries < 8; tries++) {
+      const a = this.random() * Math.PI * 2,
+        d = 210 + this.random() * 90;
+      const p = {
+        x: clamp(this.player.x + Math.cos(a) * d, 110, 1170),
+        y: clamp(this.player.y + Math.sin(a) * d, 120, 690),
+      };
+      if (!this.level.obstacles.some((b) => circleRect(p, e.radius, b))) {
+        e.x = p.x;
+        e.y = p.y;
+        this.emit('dash', e, { color: 0xe6c9d8 });
+        return;
+      }
+    }
+  }
+  private enemyFan(
+    e: Enemy,
+    count: number,
+    spread: number,
+    speed: number,
+    damage = 10,
+    radius = 6,
+    color = 0xf19bac,
+  ) {
+    for (let i = 0; i < count; i++)
+      this.enemyBullet(
+        e,
+        e.angle + (count > 1 ? (i / (count - 1) - 0.5) * spread * 2 : 0),
+        speed,
+        damage,
+        radius,
+        color,
+      );
+  }
+  private enemyRadial(e: Enemy, count: number, speed: number) {
+    for (let i = 0; i < count; i++)
+      this.enemyBullet(e, (i / count) * Math.PI * 2 + e.age * 0.3, speed);
+    this.emit('explosion', e, { color: 0xe89aaa, value: 65 });
+  }
+  /** Per-boss attack scripts, executed when the windup finishes. */
+  private bossAttack(e: Enemy) {
+    const phase2 = e.hp < e.maxHp / 2;
+    e.atk = (e.atk ?? 0) + 1;
+    switch (e.bossId) {
+      case 'zombie':
+        this.summon(e, phase2 ? 3 : 2, 'crawler', 'spider');
+        if (phase2) this.enemyFan(e, 6, 0.55, 225);
+        e.cooldown = phase2 ? 1.9 : 2.6;
+        break;
+      case 'doll':
+        this.bossBlink(e);
+        this.enemyFan(e, phase2 ? 9 : 6, phase2 ? 0.5 : 0.35, 265, 9, 4, 0xe8d8e2);
+        e.cooldown = phase2 ? 1.5 : 2.2;
+        break;
+      case 'scorpion':
+        if (e.atk % 2 === 1) {
+          e.charge = 0.55;
+          this.emit('dash', e, { color: 0xc4cfe0 });
+        } else this.enemyFan(e, 5, 0.4, 240);
+        if (phase2 && e.atk % 3 === 0) this.enemyRadial(e, 14, 190);
+        e.cooldown = phase2 ? 1.8 : 2.4;
+        break;
+      case 'crow':
+        this.summon(e, phase2 ? 3 : 2, 'crawler', 'bat');
+        this.enemyFan(e, phase2 ? 8 : 5, 0.9, 205);
+        e.cooldown = phase2 ? 1.7 : 2.5;
+        break;
+      case 'flower':
+      default:
+        if (e.atk % 3 === 0) this.summon(e, 2, 'crawler', 'spider');
+        if (e.atk % 2 === 0 || phase2) this.enemyRadial(e, phase2 ? 18 : 12, phase2 ? 195 : 165);
+        else this.enemyFan(e, 5, 0.5, 210);
+        e.cooldown = phase2 ? 1.7 : 2.4;
+    }
   }
   private updateEnemies(dt: number) {
     for (const e of this.enemies) {
@@ -569,14 +713,7 @@ export class Simulation {
             e.charge = 0.5;
             this.emit('dash', e, { color: 0xe7a396 });
           }
-          if (e.kind === 'boss') {
-            const phase = e.hp < e.maxHp / 2;
-            const count = phase ? 18 : 12;
-            for (let i = 0; i < count; i++)
-              this.enemyBullet(e, (i / count) * Math.PI * 2 + e.age * 0.3, phase ? 195 : 165);
-            e.cooldown = phase ? 1.6 : 2.5;
-            this.emit('explosion', e, { color: 0xe89aaa, value: 65 });
-          }
+          if (e.kind === 'boss') this.bossAttack(e);
         }
       } else if (e.charge > 0) {
         this.enemyMove(e, normalize({ x: e.target.x - e.x, y: e.target.y - e.y }), 470, dt);
@@ -600,14 +737,18 @@ export class Simulation {
         if (e.cooldown <= 0 && d < 450 && this.lineClear(e, this.player)) {
           e.windup = 0.85;
           e.target = { ...this.player };
-          e.cooldown = 3.6;
+          e.cooldown = e.elite ? 2.3 : 3.6;
         } else this.enemyMove(e, this.directionTo(e, this.player), 62 * slow, dt);
       } else if (e.kind === 'boss') {
         if (e.cooldown <= 0) {
           e.windup = 1.0;
           e.target = { ...this.player };
         }
-        if (d > 220) this.enemyMove(e, this.directionTo(e, this.player), 26 * slow, dt);
+        const stationary = e.bossId === 'flower';
+        const enraged = e.bossId === 'zombie' && e.hp < e.maxHp / 2;
+        const speed = (e.bossId === 'crow' ? 38 : 26) * (enraged ? 1.8 : 1);
+        if (!stationary && d > 220)
+          this.enemyMove(e, this.directionTo(e, this.player), speed * slow, dt);
       } else
         this.move(
           e,
@@ -637,18 +778,25 @@ export class Simulation {
       }
     }
   }
-  private enemyBullet(e: Enemy, a: number, speed: number) {
+  private enemyBullet(
+    e: Enemy,
+    a: number,
+    speed: number,
+    damage = 10,
+    radius = 6,
+    color = 0xf19bac,
+  ) {
     this.bullets.push({
       id: this.nextId++,
       x: e.x + Math.cos(a) * (e.radius + 8),
       y: e.y + Math.sin(a) * (e.radius + 8),
       vx: Math.cos(a) * speed,
       vy: Math.sin(a) * speed,
-      damage: 10,
+      damage,
       ttl: 5,
       enemy: true,
-      radius: 6,
-      color: 0xf19bac,
+      radius,
+      color,
       pierce: 0,
       hits: new Set(),
       owner: 'enemy',
@@ -789,6 +937,11 @@ export class Simulation {
       });
       // Heavy kills stop the world longer; regular kills only flinch.
       this.freeze = Math.max(this.freeze, e.kind === 'brute' || e.kind === 'boss' ? 0.09 : 0.045);
+      // Elite bats split into a pair of screechers when killed.
+      if (e.elite && e.skin === 'bat' && !this.training) {
+        this.spawnAt({ x: clamp(e.x - 26, 100, 1180), y: e.y }, 'crawler', 'bat');
+        this.spawnAt({ x: clamp(e.x + 26, 100, 1180), y: e.y }, 'crawler', 'bat');
+      }
       if (this.skills.includes('leech'))
         this.player.hp = Math.min(this.player.maxHp, this.player.hp + 3);
       if (this.random() < 0.16)
