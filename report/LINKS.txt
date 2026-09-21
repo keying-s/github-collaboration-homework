@@ -4,8 +4,8 @@ Ember Protocol · 余烬协议 — Group Assignment Package / 小组作业提交
 [EN]
 - Project document: PROJECT_REPORT.pdf (Chinese) / PROJECT_REPORT_EN.pdf (English);
   Markdown sources (PROJECT_REPORT.md / PROJECT_REPORT_EN.md) are included for reference.
-- Poster: assets/poster.png (also embedded in the documents).
-- Playtest feedback: assets/feedback-survey.xlsx — 12 valid responses (requirement: ≥10).
+- Poster: poster.png (top level; also embedded in the documents).
+- Playtest feedback: feedback-survey.xlsx (top level) — 12 valid responses (requirement: ≥10).
 - Landing page (playable game online):
   https://keying-s.github.io/github-collaboration-homework/
 - Repository (full development history: 28 PRs, 28 Issues, CI, agent collaboration norms):
@@ -14,8 +14,8 @@ Ember Protocol · 余烬协议 — Group Assignment Package / 小组作业提交
 [中文]
 - 项目文档：PROJECT_REPORT.pdf（中文）/ PROJECT_REPORT_EN.pdf（英文）；
   Markdown 源文件一并附上，便于查阅。
-- 宣传海报：assets/poster.png（文档内亦有嵌入）。
-- 试玩反馈：assets/feedback-survey.xlsx —— 12 份有效问卷（要求 ≥10 条）。
+- 宣传海报：poster.png（位于顶层；文档内亦有嵌入）。
+- 试玩反馈：feedback-survey.xlsx（位于顶层）—— 12 份有效问卷（要求 ≥10 条）。
 - 落地页（在线可玩游戏）：
   https://keying-s.github.io/github-collaboration-homework/
 - 代码仓库（完整开发历程：28 个 PR、28 个 Issue、CI、Agent 协作规范）：

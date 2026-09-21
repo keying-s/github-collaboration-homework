@@ -31,7 +31,7 @@ This model produced (details in Section 5): **28 pull requests (24 merged, 4 pro
 
 The promotional poster — headline "DEFEND THE GATE. SURVIVE THE SWARM.", a mechanical colossus bearing down while two operatives defend a glowing core; the three cards below spell out the gameplay pillars (clear rooms / build your loadout / face the boss), and the PLAY NOW strip is the online entry point:
 
-![Ember Protocol promotional poster](assets/poster.png)
+![Ember Protocol promotional poster](poster.png)
 
 ### 1.2 Repository Structure
 
@@ -346,7 +346,7 @@ Every game PR must pass before merge: `npm test` + `npm run build` (strict TS) +
 
 ### 6.1 Survey Overview
 
-After the game went live on the public play link, we ran an online survey from **2026-09-20 to 09-21** and collected **12 valid responses** (respondents from Shenzhen / Dongguan / Guangzhou in Guangdong, Shanghai, plus Singapore, the USA and Canada). The survey had five rated dimensions (10-point scale) and one open comment; raw data is in [`assets/feedback-survey.xlsx`](assets/feedback-survey.xlsx) in this folder (stored in the repository as `docs/Ember Protocol 游戏反馈_12_12.xlsx`).
+After the game went live on the public play link, we ran an online survey from **2026-09-20 to 09-21** and collected **12 valid responses** (respondents from Shenzhen / Dongguan / Guangzhou in Guangdong, Shanghai, plus Singapore, the USA and Canada). The survey had five rated dimensions (10-point scale) and one open comment; raw data is in [`feedback-survey.xlsx`](feedback-survey.xlsx) at the top of this folder (stored in the repository as `docs/Ember Protocol 游戏反馈_12_12.xlsx`).
 
 ### 6.2 Ratings
 
@@ -397,6 +397,6 @@ Combining scores and comments: **learnability, visual style and overall fun are 
 | Issues / PRs | <https://github.com/keying-s/github-collaboration-homework/issues> / <https://github.com/keying-s/github-collaboration-homework/pulls> |
 | Game CI workflow | <https://github.com/keying-s/github-collaboration-homework/actions/workflows/game-ci.yml> |
 | Pages deployment workflow | <https://github.com/keying-s/github-collaboration-homework/actions/workflows/deploy-pages.yml> |
-| Playtest feedback raw data (survey) | `assets/feedback-survey.xlsx` in this folder (repo: `docs/Ember Protocol 游戏反馈_12_12.xlsx`) |
+| Playtest feedback raw data (survey) | `feedback-survey.xlsx` at the top of this folder (repo: `docs/Ember Protocol 游戏反馈_12_12.xlsx`) |
 
-*Screenshots in this report were captured from the game running the current main branch (2026-09-21) and are stored in `assets/`; the promotional poster is `assets/poster.png`.*
+*Screenshots in this report were captured from the game running the current main branch (2026-09-21) and are stored in `assets/`; the promotional poster is `poster.png` at the top level of this folder.*

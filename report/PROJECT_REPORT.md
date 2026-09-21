@@ -31,7 +31,7 @@
 
 游戏宣传海报——主标语"守住大门，在虫潮中幸存 / DEFEND THE GATE. SURVIVE THE SWARM."，机械巨物压境、双角色守卫能量核心的对抗构图；中下三张卡片对应玩法三支柱（清房 / 强化构筑 / 迎战 Boss），底部"PLAY NOW"即在线试玩入口：
 
-![余烬协议宣传海报](assets/poster.png)
+![余烬协议宣传海报](poster.png)
 
 ### 1.2 仓库结构
 
@@ -346,7 +346,7 @@ main（始终可发布，Pages 随之部署）
 
 ### 6.1 问卷概况
 
-游戏上线公开试玩链接后，我们于 **2026-09-20 至 09-21** 发放在线问卷，共回收 **12 份有效答卷**（答卷人来自广东深圳 / 东莞 / 广州、上海，以及新加坡、美国、加拿大）。问卷包含五个评分维度（10 分制）与一条开放评语；原始数据见本文件夹 [`assets/feedback-survey.xlsx`](assets/feedback-survey.xlsx)（仓库中位于 `docs/Ember Protocol 游戏反馈_12_12.xlsx`）。
+游戏上线公开试玩链接后，我们于 **2026-09-20 至 09-21** 发放在线问卷，共回收 **12 份有效答卷**（答卷人来自广东深圳 / 东莞 / 广州、上海，以及新加坡、美国、加拿大）。问卷包含五个评分维度（10 分制）与一条开放评语；原始数据见本文件夹顶层的 [`feedback-survey.xlsx`](feedback-survey.xlsx)（仓库中位于 `docs/Ember Protocol 游戏反馈_12_12.xlsx`）。
 
 ### 6.2 评分结果
 
@@ -397,6 +397,6 @@ main（始终可发布，Pages 随之部署）
 | Issues / PR 列表 | <https://github.com/keying-s/github-collaboration-homework/issues> / <https://github.com/keying-s/github-collaboration-homework/pulls> |
 | Game CI 工作流 | <https://github.com/keying-s/github-collaboration-homework/actions/workflows/game-ci.yml> |
 | Pages 部署工作流 | <https://github.com/keying-s/github-collaboration-homework/actions/workflows/deploy-pages.yml> |
-| 试玩反馈原始数据（问卷） | 本文件夹 `assets/feedback-survey.xlsx`（仓库 `docs/Ember Protocol 游戏反馈_12_12.xlsx`） |
+| 试玩反馈原始数据（问卷） | 本文件夹顶层 `feedback-survey.xlsx`（仓库 `docs/Ember Protocol 游戏反馈_12_12.xlsx`） |
 
-*本报告中的截图截取自当前 main 分支的游戏实机画面（2026-09-21），保存在 `assets/` 目录；宣传海报同样位于 `assets/poster.png`。*
+*本报告中的截图截取自当前 main 分支的游戏实机画面（2026-09-21），保存在 `assets/` 目录；宣传海报位于本文件夹顶层 `poster.png`。*
